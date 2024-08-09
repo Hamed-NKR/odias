@@ -42,14 +42,14 @@ n_z = length(z);
 
 
 %== Evaluate DMA transfer function =======================================%
-disp('Computing DMA kernel:');
+% disp('Computing DMA kernel:');
 Omega = sparse(n_b, n_i);
 
 if nargout > 2
     Omega_z = zeros([size(Omega), length(z)]);
 end
 
-tools.textbar([0, n_z]);
+% tools.textbar([0, n_z]);
 for ii=1:n_z  % loop through charge states
     Omega_ii = tfer.dma( ...  % evalute transfer function
         d_star' .* 1e-9, d .* 1e-9, ...
@@ -66,13 +66,13 @@ for ii=1:n_z  % loop through charge states
         Omega_z(:, :, ii) = Omega_ii;
     end
     
-    tools.textbar([ii, n_z]);
+    % tools.textbar([ii, n_z]);
 end
 if nargout > 2
     Omega_z = permute(Omega_z, [1, 3, 2]);
 end
 
-disp(' ');
+% disp(' ');
 
 
 end
