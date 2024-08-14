@@ -70,10 +70,6 @@ set(f4, 'color', 'white');
 cm = colormap(turbo); % choose colormap
 ii = round(1 + (length(cm) - 1) .* (0.1 : 0.8 / (n_dat - 1) : 0.9));
 cm = cm(ii,:); % descretize colors
-% cm = flip(cm,1); % flip the order of colors if needed
-% if ismatrix(intab.clr)
-%     intab.clr = repmat('#000000', n_dat0, 1);
-% end
 
 %% initialize and load variables and parameters for inversion %%
 
@@ -155,6 +151,10 @@ for i = 1 : n_dat0
         dm_max{i}(dn_dlogd_max{i} / max(dn_dlogd_max{i}) < 0.1) = [];
         dn_dlogd_max{i}(dn_dlogd_max{i} / max(dn_dlogd_max{i}) < 0.1) = [];
         
+        % remove out of range peaks
+        dn_dlogd_max{i}(dm_max{i} > 1000) = [];
+        dm_max{i}(dm_max{i} > 1000) = [];
+
         % find 1d effective densities based on modes
         rho_max{i} = DAT.RHO_EFF(dm_max{i}, dat(i).da);
         
@@ -192,7 +192,7 @@ legend(cat(2, plt1{i_dat}), cat(2, lgd(i_dat)), 'interpreter', 'latex',...
     'FontSize', 14, 'location', 'eastoutside', 'NumColumns', ceil(n_dat/16))
 
 title(ax1, rigstr, 'interpreter', 'latex', 'FontSize', 12)
-subtitle(ax1, '\textit{Tikhonov regularization}', 'interpreter', 'latex',...
+subtitle(ax1, '\textit{1D Tikhonov regularization}', 'interpreter', 'latex',...
     'FontSize', 12)
 
 exportgraphics(f1, strcat('outputs\', tname0, '_TandemDist.png'),...
@@ -232,7 +232,7 @@ legend(cat(2, plt2{i_dat}, plt2_0), cat(2, lgd(i_dat), {'Olfert and Rogak (2019)
     'NumColumns', ceil(n_dat/16))
 
 title(ax2, rigstr, 'interpreter', 'latex', 'FontSize', 12)
-subtitle(ax2, '\textit{Tikhonov regularization}', 'interpreter', 'latex',...
+subtitle(ax2, '\textit{1D Tikhonov regularization}', 'interpreter', 'latex',...
     'FontSize', 12)
 
 exportgraphics(f2, strcat('outputs\', tname0, '_Dens1D.png'),...
@@ -285,7 +285,7 @@ xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex', 'FontSize', 16)
 ylabel('$d_\mathrm{a}$ [nm]', 'interpreter', 'latex', 'FontSize', 16)
 
 title(ax3, rigstr, 'interpreter', 'latex', 'FontSize', 12)
-subtitle(ax3, '\textit{Tikhonov regularization}', 'interpreter', 'latex',...
+subtitle(ax3, '\textit{1D Tikhonov regularization}', 'interpreter', 'latex',...
     'FontSize', 12)
 
 exportgraphics(f3, strcat('outputs\', tname0, '_Dist2d.png'),...
@@ -339,7 +339,7 @@ legend(plt4_0, 'Olfert and Rogak (2019)', 'interpreter', 'latex',...
     'FontSize', 12, 'location', 'southwest')
 
 title(ax4, rigstr, 'interpreter', 'latex', 'FontSize', 12)
-subtitle(ax4, '\textit{Tikhonov regularization}', 'interpreter', 'latex',...
+subtitle(ax4, '\textit{1D Tikhonov regularization}', 'interpreter', 'latex',...
     'FontSize', 12)
 
 exportgraphics(f4, strcat('outputs\', tname0, '_Dens2d.png'),...
@@ -363,7 +363,7 @@ sub1 = get(ax1, 'Subtitle');
 sub5 = get(ax5(2), 'Subtitle');
 set(sub5, 'FontSize', get(sub1, 'FontSize'));
 set(gca, 'YScale', 'log')
-ylim([1, 0.3 * max(ylim)])
+ylim([1, inf])
 
 exportgraphics(f5, strcat('outputs\', tname0, '_TandemDist_Log.png'),...
     'Resolution', 300)
