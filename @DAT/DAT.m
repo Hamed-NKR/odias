@@ -658,6 +658,15 @@ classdef DAT
             rigtab = readtable(f_add, opts, 'UseExcel',true,...
                 'Sheet', t_name);
             
+            % remove empty rows
+            for i = 1 : size(rigtab,1)
+                if isempty(cat(2,cell2mat(rigtab{i,:})))
+                    i_rmv = i;
+                    break
+                end
+            end
+            rigtab(i_rmv:end, :) = [];
+
             % extract field names from the table
             fld = fieldnames(rigtab);
             fld = fld(1:end-3);
@@ -697,20 +706,19 @@ classdef DAT
             
         end
 
-        function rigstr = LABELADJ(rigstr0)
+        function rigstr = LABELADJ(rigstr0, varargin)
             % LABELADJ adjusts the length and format of input label.
             % ======================================================== %
             % rigstr: a 'char' variable typically describing the...
             %   ...settings of an experiment.
             % ======================================================== %
             
-            % adjust the length of description text
-            i_rstr = strfind(rigstr0, '$');
-            n_rstr = ceil(numel(i_rstr) / 2);
-            rigstr0 = char(strcat(rigstr0(1 : i_rstr(1) - 1),...
-                string(newline), rigstr0(i_rstr(1) : i_rstr(n_rstr + 1)...
-                - 1), string(newline), rigstr0(i_rstr(n_rstr + 1) : end)));
-            
+            % initialize break point location for title if not input
+            if nargin < 2; varargin{1} = struct(); end
+            if ~isfield(varargin{1}, 'bp')
+                varargin{1}.bp = 2;
+            end
+
             % unitalicize subscripts in variables
             ii1_rstr = strfind(rigstr0, '_');
             ii2_rstr = strfind(rigstr0, '$');
@@ -735,9 +743,20 @@ classdef DAT
                 end
             end
             rigstr{end} = rigstr0(ii2_rstr(end) + 1 : end);
-            rigstr = strcat(rigstr{:});
+            rigstr = cell2mat(strcat(rigstr{:}));
+
+            % adjust the length of description text
+            i_rstr = strfind(rigstr, '$');
+            n_rstr = ceil(numel(i_rstr) / varargin{1}.bp);
+            rigstr = char(strcat(rigstr(1 : i_rstr(n_rstr + 1)),...
+                string(newline), rigstr(i_rstr(n_rstr + 1) + 1 : end)));            
+            % rigstr = char(strcat(rigstr(1 : i_rstr(1) - 1),...
+            %     string(newline), rigstr(i_rstr(1) : i_rstr(n_rstr + 1)...
+            %     - 1), string(newline), rigstr(i_rstr(n_rstr + 1) : end)));            
             
         end
+
+        
         
     end
 
