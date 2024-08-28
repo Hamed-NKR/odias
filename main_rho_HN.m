@@ -2,15 +2,25 @@ clear;
 close all;
 clc;
 
-% import low agglomeration data
-load('outputs\26JUL24_rhos.mat')
-dm_max_lal = cat(1, dm_max{:});
-rho_max_lal = cat(1, rho_max{:});
+% import low agglomeration data - repeat 1
+load('outputs\26JUL24\26JUL24_rhos.mat')
+dm_max_lal_r1 = cat(1, dm_max{:});
+rho_max_lal_r1 = cat(1, rho_max{:});
 
-% import high agglomeration data
-load('outputs\30JUL24_rhos.mat')
-dm_max_hal = cat(1, dm_max{:});
-rho_max_hal = cat(1, rho_max{:});
+% import high agglomeration data - repeat 1
+load('outputs\30JUL24\30JUL24_rhos.mat')
+dm_max_hal_r1 = cat(1, dm_max{:});
+rho_max_hal_r1 = cat(1, rho_max{:});
+
+% import low agglomeration data - repeat 2
+load('outputs\20AUG24_1\20AUG24_1_rhos.mat')
+dm_max_lal_r2 = cat(1, dm_max{:});
+rho_max_lal_r2 = cat(1, rho_max{:});
+
+% import high agglomeration data - repeat 2
+load('outputs\21AUG24\21AUG24_rhos.mat')
+dm_max_hal_r2 = cat(1, dm_max{:});
+rho_max_hal_r2 = cat(1, rho_max{:});
 
 clear dm_max rho_max % clear redundant variables
 
@@ -29,8 +39,10 @@ plt_0 = plot(dm0, rho0, 'Color', [0.4940 0.1840 0.5560],...
 hold on
 
 % plot effective density based on mode for low and high agglomeration cases
-plt_lal = scatter(dm_max_lal, rho_max_lal, 15, hex2rgb('#EE4E4E'), 'o');
-plt_hal = scatter(dm_max_hal, rho_max_hal, 15, hex2rgb('#006989'), 'o');
+plt_lal_r1 = scatter(dm_max_lal_r1, rho_max_lal_r1, 15, hex2rgb('#EE4E4E'), 'o');
+plt_hal_r1 = scatter(dm_max_hal_r1, rho_max_hal_r1, 15, hex2rgb('#006989'), '^');
+plt_lal_r2 = scatter(dm_max_lal_r2, rho_max_lal_r2, 15, hex2rgb('#EE4E4E'), 's');
+plt_hal_r2 = scatter(dm_max_hal_r2, rho_max_hal_r2, 15, hex2rgb('#006989'), 'v');
 
 % plot appearance configs
 set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
@@ -45,8 +57,10 @@ xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
     'FontSize', 14)
 ylabel('$\rho_\mathrm{eff}$ [kg/$\mathrm{m}^{3}$]',...
     'interpreter', 'latex', 'FontSize', 14)
-legend(cat(2, plt_0, plt_lal, plt_hal), cat(2, {'Olfert and Rogak (2019)'},...
-    {'Low agglomeration'}, {'high agglomeration'}),...
+legend(cat(2, plt_0, plt_lal_r1, plt_hal_r1 , plt_lal_r2, plt_hal_r2),...
+    cat(2, {'Olfert and Rogak (2019)'},...
+    {'Low agglomeration - Repeat 1'}, {'high agglomeration - Repeat 1'},...
+    {'Low agglomeration - Repeat 2'}, {'high agglomeration - Repeat 2'}),...
     'interpreter', 'latex', 'FontSize', 14, 'location', 'southwest')
 % title(rigstr, 'interpreter', 'latex', 'FontSize', 12)
 % subtitle('\textit{1D Tikhonov regularization}', 'interpreter', 'latex',...

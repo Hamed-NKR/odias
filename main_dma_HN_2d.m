@@ -148,8 +148,8 @@ for i = 1 : n_dat0
         [dn_dlogd_max{i}, dm_max{i}] = findpeaks(dn_dlogd{i}, dm{i});
 
         % remove noises from the modes
-        dm_max{i}(dn_dlogd_max{i} / max(dn_dlogd_max{i}) < 0.1) = [];
-        dn_dlogd_max{i}(dn_dlogd_max{i} / max(dn_dlogd_max{i}) < 0.1) = [];
+        dm_max{i}(dn_dlogd_max{i} / max(dn_dlogd_max{i}) < 0.2) = [];
+        dn_dlogd_max{i}(dn_dlogd_max{i} / max(dn_dlogd_max{i}) < 0.2) = [];
         
         % remove out of range peaks
         dn_dlogd_max{i}(dm_max{i} > 1000) = [];
