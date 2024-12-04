@@ -7,8 +7,8 @@ warning('off')
 addpath cmap;
 
 %%% read user input parameters %%%
-tname0 = '26&30JUL24'; % datasheet to be imported
-f_in_add = 'inputs\odias_params.xlsx'; 
+tname0 = '13SEP24'; % datasheet to be imported
+f_in_add = 'inputs\odias_params_new.xlsx'; 
 opts = detectImportOptions(f_in_add);
 opts = setvartype(opts, 'char');
 intab = readtable(f_in_add, 'UseExcel', true, 'Sheet', tname0);
@@ -17,9 +17,11 @@ tname = intab.tname{1}; % tabname that contains data of interest
 fname_lbl = intab.fname_lbl{1};
 n_dat = intab.n_dat(1);
 lambda_tk1 = intab.lambda_tk1;
-clr = intab.clr;
-d_lim_1 = intab.d_lim_1;
-d_lim_2 = intab.d_lim_2;
+clr = intab.clr; % plot line color
+linstl = intab.stl; % plot line color
+d_lim_1 = intab.d_lim_1; % lower limit on mobility diameter
+d_lim_2 = intab.d_lim_2; % upper limit on mobility diameter
+dm_rowid = intab.dm_rowid; % row id in DMA file that contains mobility diameter
 %%% %%%
 
 
@@ -33,7 +35,7 @@ prop = tfer.prop_dma; % load default dma properties
 % initialize figure
 figure;
 h = gcf;
-h.Position = [0, 0, ceil(n_dat/8) * 650, 450];
+h.Position = [0, 0, 1000, 600];
 set(h, 'color', 'white');
 
 plt = cell(n_dat,1); % placeholder to store plots for assigning legends
@@ -43,10 +45,10 @@ tools.textbar([0, n_dat]); % initialize textbar
 for i = 1 : n_dat
     
     % import DMA files and average particle counts
-    dat(i) = DAT(i, fname, tname);
+    dat(i) = DAT(i, fname, tname, dm_rowid(i));
 
     % adjust the description text
-    rigstr{i} = DAT.LABELADJ(rigstr{i});
+    % rigstr{i} = DAT.LABELADJ(rigstr{i});
     
     % reconstruction points
     d = logspace(log10(d_lim_1(i)), log10(d_lim_2(i)), 500)';
@@ -73,10 +75,10 @@ for i = 1 : n_dat
     % disp(' ');
     
     % plot mobility size distribution
-    plt{i} =  tools.plotci(d, x_tk1, Gpo_tk1, [], hex2rgb(clr{i}));
+    plt{i} =  tools.plotci_HN(d, x_tk1, Gpo_tk1, [], hex2rgb(clr{i}), linstl{i});
     hold on
     
-    rigstr{i} = strrep(rigstr{i},'nof','n/f'); % minor label adjustment
+    % rigstr{i} = strrep(rigstr{i},'nof','n/f'); % minor label adjustment
 
     tools.textbar([i, n_dat]); % update textbar
 end
@@ -89,7 +91,7 @@ xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
     'FontSize', 16)
 ylabel('$\mathrm{d}n/\mathrm{dlog}(d_\mathrm{m})$',...
     'interpreter', 'latex', 'FontSize', 16)
-% legend(cat(2, plt{:}), cat(2, rigstr{:}), 'interpreter', 'latex',...
-%     'Location', 'eastoutside', 'NumColumns', ceil(n_dat/8), 'FontSize', 12)
+legend(cat(2, plt{:}), cat(2, rigstr(:)), 'interpreter', 'latex',...
+    'Location', 'eastoutside', 'FontSize', 12)
 
 

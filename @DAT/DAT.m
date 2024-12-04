@@ -31,13 +31,15 @@ classdef DAT
     
     methods
         
-        function obj = DAT(pid, f0_name, t_name, varargin)
+        function obj = DAT(pid, f0_name, t_name, dm_rowid, varargin)
             % DAT constructs an instance of this class.
             %   DMA .xlsx file is imported. Raw counts and setpoint info...
             %   ...are extracted.
             % ======================================================== %
             % f0_name: filename of instrument settings table
             % t_name: tab (sheet) name in excel file
+            % dm_rowid: assign which row of DMA file to use for...
+            %   ...extracting mobility diameter.
             % pid: the test point id for which DMA data is to be extracted 
             % varargin: variable argument; varargin{1} is address of...
             %   ...instrument settings file.
@@ -78,11 +80,11 @@ classdef DAT
             dat0 = readtable(f_add, opts);
             
             % save mobility setpoints and their number
-            obj.dm = table2array(dat0(19, 39:end));
+            obj.dm = table2array(dat0(dm_rowid, 39:end));
             obj.n_dm = length(obj.dm);
 
             % save raw counts for the selected scans
-            dN_raw = table2array(dat0(20:end, 39:end));
+            dN_raw = table2array(dat0((dm_rowid+1):end, 39:end));
             sidfun = str2func(['@(x)', instab.sid{pid}]);
             obj.sid = sidfun(); % scan indices to be selected
             obj.df = instab.DF(pid); % dilition factor to be multiplied...
@@ -665,7 +667,8 @@ classdef DAT
                     break
                 end
             end
-            rigtab(i_rmv:end, :) = [];
+
+            if exist("i_rmv", "var"); rigtab(i_rmv:end, :) = []; end
 
             % extract field names from the table
             fld = fieldnames(rigtab);
