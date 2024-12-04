@@ -3,7 +3,15 @@
 %  
 %  AUTHOR: Timothy Sipkens, 2021-04-09 - Revised by Hamed Nikookar, Dec. 24
 
-function h = plotci_HN(d, x, Gpo, x0, cspec, linstl)
+function h = plotci_HN(d, x, Gpo, x0, cspec, linstl, opts)
+
+% initialize plot
+if ~exist('opts', 'var') 
+    opts = struct();
+end
+if (~isfield(opts, 'log')) || isempty(opts.log)
+    opts.log = 'off'; % use continuum regime approximation
+end
 
 if ~exist('x0', 'var'); x0 = []; end
 
@@ -23,6 +31,17 @@ x_high2 = x + 2 .* sqrt(diag(Gpo));
 x_low2 = max(x - 2 .* sqrt(diag(Gpo)),0);
 x_high1 = x + sqrt(diag(Gpo));
 x_low1 = max(x - sqrt(diag(Gpo)),0);
+
+if strcmp(opts.log, 'on') || strcmp(opts.log, 'On') || strcmp(opts.log, 'ON')
+    ind_rmv = (x_low1 <= 0) | (x_low2 <= 0) | (x_high1 <= 0) |...
+        (x_high2 <= 0);
+    x_low1(ind_rmv) = [];
+    x_low2(ind_rmv) = [];
+    x_high1(ind_rmv) = [];
+    x_high2(ind_rmv) = [];
+    d(ind_rmv) = [];
+    x(ind_rmv) = [];
+end
 
 % Plot shaded region.
 reg = [x_low2; flipud(x_high2)];
