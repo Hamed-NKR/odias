@@ -10,7 +10,7 @@ addpath cmap; % load cmap library
 
 tname0 = '13SEP24_SWEEP_ON_FUEL'; % name of excel datasheet for cases to be imported
 f_in_add = 'inputs\odias_params_new.xlsx'; % address of folder containing main user info
-opts2.correct = 'off'; % flag for whether reiterate the inversion
+opts2.correct = 'on'; % flag for whether reiterate the inversion
 
 %% read input files from the user containing details of SMPS data and settings for post-processing %%
 
@@ -61,33 +61,50 @@ lambda_tk1_0 = lambda_tk1; % store initial inputs for smoothing Tikhonov results
 clr2 = {'#FD8A8A', '#F1F7B5', '#A8D1D1', '#9EA1D4'};
 
 % allocate space to TSI inverted size distributions
-dist_tsi = struct('fadd', cell(n_dat,1), 'dm', cell(n_dat,1),...
-    'dn_dlogdm', cell(n_dat, 1));
+dist_tsi = struct('fadd', cell(n_dat,1), 'tab0', cell(n_dat,1),...
+    'dm', cell(n_dat,1), 'dn0_dlogdm', cell(n_dat, 1),...
+    'dn_dlogdm', cell(n_dat, 1), 'sigma', cell(n_dat, 1));
 
 % assign class objects to be inverted 
 ii = 1 : n_dat;
 ii = ii(incld);
 
-tools.textbar([0, n_dat]); % initialize progress textbar
-
+tools.textbar([0, length(ii)]); % initialize progress textbar
 
 %% iterate through test cases, performing inversion and plotting results %%
 
 for i = ii
+
+    % import non-inverted (a.k.a raw) SMPS files and average particle counts
+    dat(i) = DAT(i, fname, tname, dm_rowid(i));
     
-    obj.f_dir = instab.f_add_raw{pid};
-    pid0 = pid;
-    while isempty(obj.f_dir) && (pid0 > 0)
-        pid0 = pid0 - 1;
-        obj.f_dir = instab.f_add_raw{pid0};
+    % acquire and save the folder address for the TSI-inverted SMPS data 
+    dist_tsi(i).fadd = intab.f_add_tsi_inv{i};
+    ii0 = i;
+    while isempty(dist_tsi(i).fadd) && (ii0 > 0)
+        ii0 = ii0 - 1;
+        dist_tsi(i).fadd = intab.f_add_tsi_inv{ii0};
     end
 
-    % save the file name, AAC setpoint, AAC and DMA sheath flows...
-    % ...and DMA scan indices
-    obj.f_name = instab.f_name_raw{pid};
+    % concatinate the filename and folder name
+    dist_tsi(i).fadd = strcat(dist_tsi(i).fadd, '\',...
+        intab.f_name_tsi_inv{i}, '.csv');
+    
+    % import TSI inverted data
+    opts_tsi = detectImportOptions(dist_tsi(i).fadd);
+    opts_tsi = setvartype(opts_tsi, 'double');
+    dist_tsi(i).tab0 = readtable(dist_tsi(i).fadd, opts_tsi);
 
-    % import SMPS files and average particle counts
-    dat(i) = DAT(i, fname, tname, dm_rowid(i));
+    % extract mobility setpoints and inverted dn/dlog(dm) for selected scans
+    dist_tsi(i).dm = table2array(dist_tsi(i).tab0(dm_rowid(i), 39:end));
+    dist_tsi(i).dn0_dlogdm = table2array(dist_tsi(i).tab0((dm_rowid(i)+1):end,...
+        39:end));
+    dist_tsi(i).dn0_dlogdm = dist_tsi(i).dn0_dlogdm(dat(i).sid,:);
+
+    % get average and SD of dn/dlog(dm)
+    dist_tsi(i).dn_dlogdm = mean(dist_tsi(i).dn0_dlogdm);
+    dist_tsi(i).sigma = max(std(dist_tsi(i).dn0_dlogdm),...
+        1e-3 * max(std(dist_tsi(i).dn0_dlogdm)));
 
     % adjust the description text
     % rigstr{i} = DAT.LABELADJ(rigstr{i});
@@ -141,6 +158,11 @@ for i = ii
             % plot Twomey-Markowski's output (which is closest to TSI's inversion)
             plt2_twomark = tools.plotci_HN(d, x_twomark, [], [],...
                 hex2rgb(clr2{4}), '-');
+            hold on
+
+            % plot TSI's inversion
+            plt2_tsi = tools.plotci_HN(dist_tsi(i).dm',...
+                dist_tsi(i).dn_dlogdm', [], [], hex2rgb(clr2{3}), '-');
             
             % set the appearance
             set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
@@ -148,9 +170,10 @@ for i = ii
             xlim([15,1000])
             xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
                 'FontSize', 16)
-            legend([plt2_tk, plt2_twomark], {'Tikhonov', 'Twomey-Markowski'},...
-                'interpreter', 'latex', 'FontSize', 12, 'Location',...
-                'northoutside', 'orientation', 'horizontal')
+            legend([plt2_tk, plt2_twomark, plt2_tsi], {'Tikhonov',...
+                'Twomey-Markowski', 'TSI'}, 'interpreter', 'latex',...
+                'FontSize', 12, 'Location', 'northoutside',...
+                'orientation', 'horizontal')
             
             % prompt to ask user's input on whether inversion is satisfactory
             response2a = questdlg('Does inversion smooting meet the expectations?', ...
@@ -209,7 +232,7 @@ for i = ii
     % rigstr{i} = strrep(rigstr{i},'nof','n/f'); % minor label adjustment
 
     % apply the axis configurations
-    if i == n_dat
+    if i == ii(end)
         set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
             'TickLength', [0.02 0.02], 'XScale', 'log')    
         xlim([15,1000])
@@ -232,7 +255,7 @@ for i = ii
     hold on
 
     % apply the log-log scale and other axis configurations
-    if i == n_dat
+    if i == ii(end)
         set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
             'TickLength', [0.02 0.02], 'XScale', 'log', 'YScale', 'log')    
         xlim([15,1000])
@@ -241,7 +264,7 @@ for i = ii
             'FontSize', 16)
     end
 
-    tools.textbar([i, n_dat]); % update textbar
+    tools.textbar([i, length(ii)]); % update textbar
 end
 
 lgd1 = legend(cat(2, plt1{:}), cat(2, rigstr(:)), 'interpreter', 'latex',...
