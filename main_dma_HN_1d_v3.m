@@ -4,25 +4,34 @@ close all;
 clc;
 warning('off')
 
-addpath cmap;
+addpath cmap; % load cmap library
 
-%%% read input parameters from the user %%%
-tname0 = '13SEP24'; % name of excel datasheet for cases to be imported
+%% user's inputs to this script %%
+
+tname0 = '13SEP24_SWEEP_ON_FUEL'; % name of excel datasheet for cases to be imported
 f_in_add = 'inputs\odias_params_new.xlsx'; % address of folder containing main user info
-opts = detectImportOptions(f_in_add);
-opts = setvartype(opts, 'char'); % set excel file import option
+opts2.correct = 'off'; % flag for whether reiterate the inversion
+
+%% read input files from the user containing details of SMPS data and settings for post-processing %%
+
+opts_load = detectImportOptions(f_in_add);
+opts_load = setvartype(opts_load, 'char'); % set type of data to be imported from the excel file
 intab = readtable(f_in_add, 'UseExcel', true, 'Sheet', tname0); % read the excel file
-fname = intab.fname{1}; % identify name of smps files that contain raw particle counts
-tname = intab.tname{1}; % name of datasheet that the above smps data are located in 
+fname = intab.fname{1}; % identify name of the file which contains...
+% ...information of smps files having raw particle counts
+tname = intab.tname{1}; % name of datasheet where the above smps...
+% ...information file is located
 fname_lbl = intab.fname_lbl{1}; % label for the data to be imported
-n_dat = intab.n_dat(1); % number of test cases
-lambda_tk1 = intab.lambda_tk1; % a parameter that controls smoothing level in Tikhonov method
-clr1 = intab.clr; % assign color for plot lines
-linstl = intab.stl; % assign line style for plots
-d_lim_1 = intab.d_lim_1; % lower limit on mobility diameter (for inversion)
-d_lim_2 = intab.d_lim_2; % upper limit on mobility diameter
-dm_rowid = intab.dm_rowid; % row id in SMPS file that corresponds to mobility setpoints
-%%% %%%
+n_dat = intab.n_dat(1); % number of test cases to be examined
+lambda_tk1 = intab.lambda_tk1(1:n_dat); % a parameter that controls smoothing level in Tikhonov method
+d_lim_1 = intab.d_lim_1(1:n_dat); % lower limit on mobility diameter (for inversion)
+d_lim_2 = intab.d_lim_2(1:n_dat); % upper limit on mobility diameter
+clr1 = intab.clr(1:n_dat); % assign color for plot lines
+linstl = intab.stl(1:n_dat); % assign line style for plots
+dm_rowid = intab.dm_rowid(1:n_dat); % row id in SMPS file that corresponds to mobility setpoints
+incld = intab.incld(1:n_dat); % determine whether the class member (data case) undergoes inversion
+
+%% initialize class objects of raw SMPS data %%
 
 dat = DAT(); % initialize the class of SMPS data
 
@@ -48,14 +57,35 @@ f2 = figure(2);
 f2.Position = [200, 200, 550, 500];
 set(f2, 'color', 'white');
 
-opts2.correct = 'on'; % flag for whether reiterate the inversion
 lambda_tk1_0 = lambda_tk1; % store initial inputs for smoothing Tikhonov results
 clr2 = {'#FD8A8A', '#F1F7B5', '#A8D1D1', '#9EA1D4'};
 
+% allocate space to TSI inverted size distributions
+dist_tsi = struct('fadd', cell(n_dat,1), 'dm', cell(n_dat,1),...
+    'dn_dlogdm', cell(n_dat, 1));
+
+% assign class objects to be inverted 
+ii = 1 : n_dat;
+ii = ii(incld);
+
 tools.textbar([0, n_dat]); % initialize progress textbar
 
-for i = 1 : n_dat
-        
+
+%% iterate through test cases, performing inversion and plotting results %%
+
+for i = ii
+    
+    obj.f_dir = instab.f_add_raw{pid};
+    pid0 = pid;
+    while isempty(obj.f_dir) && (pid0 > 0)
+        pid0 = pid0 - 1;
+        obj.f_dir = instab.f_add_raw{pid0};
+    end
+
+    % save the file name, AAC setpoint, AAC and DMA sheath flows...
+    % ...and DMA scan indices
+    obj.f_name = instab.f_name_raw{pid};
+
     % import SMPS files and average particle counts
     dat(i) = DAT(i, fname, tname, dm_rowid(i));
 
@@ -86,11 +116,18 @@ for i = 1 : n_dat
     if strcmp(opts2.correct, 'on') || strcmp(opts2.correct, 'On') ||...
             strcmp(opts2.correct, 'ON')
         
-        chk_dist = true; % flag for the loop that reiterates the inversion
+        chk_flag1 = true; % flag for the loop that reiterates the inversion
+        chk_flag2 = false;
         
-        while chk_dist
-
+        while chk_flag1
+            
             figure(f2) % navigate to the plot that shows interations on inversion
+
+            if chk_flag2
+                    [x_tk1, ~, ~, Gpo_inv_tk1] = ...
+                        invert.tikhonov(Lb * A, Lb * b, lambda_tk1(i), 1);
+                    Gpo_tk1 = inv(Gpo_inv_tk1);
+            end
             
             % plot Tikhonov's results based on the last assigned lambda
             plt2_tk = tools.plotci_HN(d, x_tk1, Gpo_tk1, [],...
@@ -104,13 +141,11 @@ for i = 1 : n_dat
             % plot Twomey-Markowski's output (which is closest to TSI's inversion)
             plt2_twomark = tools.plotci_HN(d, x_twomark, [], [],...
                 hex2rgb(clr2{4}), '-');
-            hold off
             
             % set the appearance
             set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
                 'TickLength', [0.02 0.02], 'XScale', 'log')
             xlim([15,1000])
-            ylim([1e2 1.2 * max(ylim)])
             xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
                 'FontSize', 16)
             legend([plt2_tk, plt2_twomark], {'Tikhonov', 'Twomey-Markowski'},...
@@ -119,20 +154,45 @@ for i = 1 : n_dat
             
             % prompt to ask user's input on whether inversion is satisfactory
             response2a = questdlg('Does inversion smooting meet the expectations?', ...
-	            'Check inversion output', 'Yes', 'No', 'Yes');
+	            'Check inversion output', 'Yes', 'No', 'Cancel', 'Yes');
 
             % handle response
             switch response2a
                 case 'Yes'
                     % get out of the loop, plot results and go to the next case
-                    chk_dist = false;
+                    chk_flag1 = false;
 
                 case 'No'
+                    % generate the prompt message to ask user
+                    if ~chk_flag2
+                        msg_lambda = strcat('Please enter a refined lambda:');
+                        chk_flag2 = true; % flag to redo the inversion
+                    else                        
+                        msg_lambda = strcat('Please enter a refined lambda',...
+                            string(newline), '(initial value:', {' '},...
+                            num2str(lambda_tk1_0(i), '%.1e'), ',', {' '},...
+                            'recent value:', {' '}, num2str(lambda_tk1(i), '%.1e'),...
+                            ')');
+                    end
+
                     % ask user to revise lambda
-                    response2b = inputdlg('Please enter a refined lambda',...
-                        'Refine Tikhonov smoothing', [1 45], {'1e-3'});
-                    lambda_tk1(i) = str2double(response2b);
-            end            
+                    response2b = inputdlg(msg_lambda,...
+                        'Refine Tikhonov smoothing', [1 50],...
+                        {num2str(lambda_tk1(i))});
+
+                    % terminate the code if user hits cancel
+                    if ~isempty(response2b)
+                        lambda_tk1(i) = str2double(response2b);
+                    else
+                        return;
+                    end
+
+                case 'Cancel'
+                    % terminate the program
+                    return
+            end
+
+            clf(f2, 'reset')
 
         end
         
@@ -176,7 +236,7 @@ for i = 1 : n_dat
         set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
             'TickLength', [0.02 0.02], 'XScale', 'log', 'YScale', 'log')    
         xlim([15,1000])
-        ylim([1e2 1.2 * max(ylim)])
+        ylim([3e3 1.2 * max(cat(1,dN2{:}))])
         xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
             'FontSize', 16)
     end

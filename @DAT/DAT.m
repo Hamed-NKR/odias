@@ -54,16 +54,16 @@ classdef DAT
             instab = readtable(f0_add, 'UseExcel', true, 'Sheet', t_name);
             
             % find and save the file directory in the table
-            obj.f_dir = instab.f_add{pid};
+            obj.f_dir = instab.f_add_raw{pid};
             pid0 = pid;
             while isempty(obj.f_dir) && (pid0 > 0)
                 pid0 = pid0 - 1;
-                obj.f_dir = instab.f_add{pid0};
+                obj.f_dir = instab.f_add_raw{pid0};
             end
             
             % save the file name, AAC setpoint, AAC and DMA sheath flows...
                 % ...and DMA scan indices
-            obj.f_name = instab.f_name{pid};
+            obj.f_name = instab.f_name_raw{pid};
             flds = fieldnames(instab);
             if ismember({'da_nm_'},flds)
                 obj.da = instab.da_nm_(pid);
