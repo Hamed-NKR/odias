@@ -155,7 +155,7 @@ for i = ii
 
             % inversion based on Twomey-Markowski
             try % Twomey-Markowski might occasionally fail
-                xi = invert.get_init(Lb * A, Lb * b, d, dat(i).dN);
+                xi = invert.get_init(Lb * A, Lb * b, d, dat(i).dm);
                 x_twomark = invert.twomark(Lb * A, Lb * b, length(xi), xi);
             catch ME
                 x_twomark = NaN(length(d), 1);
