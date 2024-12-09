@@ -69,6 +69,8 @@ dist_tsi = struct('fadd', cell(n_dat,1), 'tab0', cell(n_dat,1),...
 ii = 1 : n_dat;
 ii = ii(incld);
 
+rr = zeros(n_dat,1);
+
 tools.textbar([0, length(ii)]); % initialize progress textbar
 
 %% iterate through test cases, performing inversion and plotting results %%
@@ -111,7 +113,7 @@ for i = ii
     
     % reconstruct mobility points
     d = logspace(log10(d_lim_1(i)), log10(d_lim_2(i)), 500)';
-    
+
     % correct sheath flows
     prop.Q_c = dat(i).Qsh_dma;
     prop.Q_m = dat(i).Qsh_dma;
@@ -147,22 +149,27 @@ for i = ii
             end
             
             % plot Tikhonov's results based on the last assigned lambda
-            plt2_tk = tools.plotci_HN(d, x_tk1, Gpo_tk1, [],...
+            plt2_tk = hn.plotci_custom(d, x_tk1, Gpo_tk1, [],...
                 hex2rgb(clr2{1}), '-');
             hold on
 
             % inversion based on Twomey-Markowski
-            xi = invert.get_init(Lb * A, Lb * b, d, dat(i).dN);
-            x_twomark = invert.twomark(Lb * A, Lb * b, length(xi), xi);
+            try % Twomey-Markowski might occasionally fail
+                xi = invert.get_init(Lb * A, Lb * b, d, dat(i).dN);
+                x_twomark = invert.twomark(Lb * A, Lb * b, length(xi), xi);
+            catch ME
+                x_twomark = NaN(length(d), 1);
+            end
             
             % plot Twomey-Markowski's output (which is closest to TSI's inversion)
-            plt2_twomark = tools.plotci_HN(d, x_twomark, [], [],...
+            plt2_twomark = hn.plotci_custom(d, x_twomark, [], [],...
                 hex2rgb(clr2{4}), '-');
             hold on
 
             % plot TSI's inversion
-            plt2_tsi = tools.plotci_HN(dist_tsi(i).dm',...
-                dist_tsi(i).dn_dlogdm', [], [], hex2rgb(clr2{3}), '-');
+            rr(i) = max(dist_tsi(i).dn_dlogdm) / max(x_tk1);
+            plt2_tsi = hn.plotci_custom(dist_tsi(i).dm',...
+                dist_tsi(i).dn_dlogdm' / rr(i), [], [], hex2rgb(clr2{3}), '-');
             
             % set the appearance
             set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
@@ -225,7 +232,7 @@ for i = ii
     nexttile(1) % non-log scales    
     
     % display the inverted mobility size distribution based on Tikhonov
-    plt1{i} =  tools.plotci_HN(d, x_tk1, Gpo_tk1, [], hex2rgb(clr1{i}),...
+    plt1{i} =  hn.plotci_custom(d, x_tk1, Gpo_tk1, [], hex2rgb(clr1{i}),...
         linstl{i});
     hold on
     
@@ -250,7 +257,7 @@ for i = ii
     
     % plot nonzero scales for display in log-log scale
     opts1b.log = 'on';
-    tools.plotci_HN(dm2{i}, dN2{i}, Gpo_tk1, [], hex2rgb(clr1{i}),...
+    hn.plotci_custom(dm2{i}, dN2{i}, Gpo_tk1, [], hex2rgb(clr1{i}),...
         linstl{i}, opts1b)
     hold on
 
@@ -272,4 +279,4 @@ lgd1 = legend(cat(2, plt1{:}), cat(2, rigstr(:)), 'interpreter', 'latex',...
 lgd1.Layout.Tile = 'south';
 lgd1.NumColumns = 2;
 
-
+close(f2)

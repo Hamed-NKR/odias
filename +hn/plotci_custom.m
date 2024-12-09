@@ -3,7 +3,7 @@
 %  
 %  AUTHOR: Timothy Sipkens, 2021-04-09 - Revised by Hamed Nikookar, Dec. 24
 
-function h = plotci_HN(d, x, Gpo, x0, cspec, linstl, opts)
+function h = plotci_custom(d, x, Gpo, x0, cspec, linstl, opts)
 
 % initialize plot
 if ~exist('opts', 'var') 
