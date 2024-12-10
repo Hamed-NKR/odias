@@ -52,11 +52,6 @@ t1 = tiledlayout(1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
 plt1 = cell(n_dat,1); % placeholder to store plots for assigning legends
 
-% initialize a plot to check inversion with baseline data at every iteration
-f2 = figure(2);
-f2.Position = [200, 200, 550, 500];
-set(f2, 'color', 'white');
-
 lambda_tk1_0 = lambda_tk1; % store initial inputs for smoothing Tikhonov results
 clr2 = {'#FD8A8A', '#F1F7B5', '#A8D1D1', '#9EA1D4'};
 
@@ -134,6 +129,12 @@ for i = ii
 
     if strcmp(opts2.correct, 'on') || strcmp(opts2.correct, 'On') ||...
             strcmp(opts2.correct, 'ON')
+
+        % initialize a plot to check inversion with baseline data at...
+        % ...every iteration
+        f2 = figure(2);
+        f2.Position = [200, 200, 550, 500];
+        set(f2, 'color', 'white');        
         
         chk_flag1 = true; % flag for the loop that reiterates the inversion
         chk_flag2 = false;
