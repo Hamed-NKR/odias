@@ -14,9 +14,11 @@ classdef DAT
         dm_max = [] % mode of mobility size distribution
         n_dm = [] % number of DMA setpoints per AAC setpoint
         dN0 = [] % raw DMA counts
+        N0_tot = [] % total number of particles counted by CPC
         sid = [] % DMA scan ids to be extracted
         df = [] % dilution factor
         dN = [] % averaged DMA counts
+        N_tot = [] % average of counts
         sigma = [] % a vector of sd of counts in each bin
         lbl = [] % strcuture containing data labels for visualization
 
@@ -100,6 +102,11 @@ classdef DAT
             % average and standard deviation of counts in each bin
             obj.dN = mean(obj.dN0);
             obj.sigma = max(std(obj.dN0), 1e-3 * max(std(obj.dN0)));
+            
+            % import and average total counts
+            N_tot_raw = table2array(dat0((dm_rowid+1):end, 36));
+            obj.N0_tot = obj.df * N_tot_raw(obj.sid);
+            obj.N_tot = mean(obj.N0_tot);
             
             % calculate the mode of a mobility size distribution
             obj.dm_max = obj.dm(obj.dN == max(obj.dN));

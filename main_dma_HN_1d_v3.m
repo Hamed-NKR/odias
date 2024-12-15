@@ -53,18 +53,21 @@ t1 = tiledlayout(1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 plt1 = cell(n_dat,1); % placeholder to store plots for assigning legends
 
 lambda_tk1_0 = lambda_tk1; % store initial inputs for smoothing Tikhonov results
-clr2 = {'#FD8A8A', '#F1F7B5', '#A8D1D1', '#9EA1D4'};
+clr2 = {'#7EACB5', '#A888B5', '#C96868'};
 
 % allocate space to TSI inverted size distributions
 dist_tsi = struct('fadd', cell(n_dat,1), 'tab0', cell(n_dat,1),...
     'dm', cell(n_dat,1), 'dn0_dlogdm', cell(n_dat, 1),...
-    'dn_dlogdm', cell(n_dat, 1), 'sigma', cell(n_dat, 1));
+    'dn_dlogdm', cell(n_dat, 1), 'sigma', cell(n_dat, 1),...
+    'n0_tot', cell(n_dat, 1), 'n_tot', zeros(n_dat,1),...
+    'A_tot', zeros(n_dat,1));
 
 % assign class objects to be inverted 
 ii = 1 : n_dat;
 ii = ii(incld);
 
-rr = zeros(n_dat,1);
+% define a multiplier to correct for conversion issues of inversion algorithm
+rN = zeros(n_dat,2); % first column is for Tikhonov and second for Twomey-Markowski
 
 tools.textbar([0, length(ii)]); % initialize progress textbar
 
@@ -96,13 +99,21 @@ for i = ii
     dist_tsi(i).dm = table2array(dist_tsi(i).tab0(dm_rowid(i), 39:end));
     dist_tsi(i).dn0_dlogdm = table2array(dist_tsi(i).tab0((dm_rowid(i)+1):end,...
         39:end));
-    dist_tsi(i).dn0_dlogdm = dist_tsi(i).dn0_dlogdm(dat(i).sid,:);
+    dist_tsi(i).dn0_dlogdm = dat(i).df * dist_tsi(i).dn0_dlogdm(dat(i).sid,:);
 
     % get average and SD of dn/dlog(dm)
     dist_tsi(i).dn_dlogdm = mean(dist_tsi(i).dn0_dlogdm);
     dist_tsi(i).sigma = max(std(dist_tsi(i).dn0_dlogdm),...
         1e-3 * max(std(dist_tsi(i).dn0_dlogdm)));
 
+    % get total counts
+    dist_tsi(i).n0_tot = table2array(dist_tsi(i).tab0((dm_rowid(i)+1):end, 36));
+    dist_tsi(i).n0_tot = dat(i).df * dist_tsi(i).n0_tot(dat(i).sid,:);
+    dist_tsi(i).n_tot = mean(dist_tsi(i).n0_tot);
+    
+    % area below the size distribution curve
+    dist_tsi(i).A_tot = trapz(log10(dist_tsi(i).dm), dist_tsi(i).dn_dlogdm);
+    
     % adjust the description text
     % rigstr{i} = DAT.LABELADJ(rigstr{i});
     
@@ -125,8 +136,13 @@ for i = ii
     % perform inversion using 1st order Tikhonov
     [x_tk1, ~, ~, Gpo_inv_tk1] = ...
         invert.tikhonov(Lb * A, Lb * b, lambda_tk1(i), 1);
-    Gpo_tk1 = inv(Gpo_inv_tk1);    
+    Gpo_tk1 = inv(Gpo_inv_tk1);
 
+    % get and apply the correction factor for concentration in Tikhonov's method
+    rN(i,1) =  dist_tsi(i).A_tot / trapz(log10(d), x_tk1);
+    x_tk1 = rN(i,1) * x_tk1;
+    Gpo_tk1 = rN(i,1) .* Gpo_tk1;
+    
     if strcmp(opts2.correct, 'on') || strcmp(opts2.correct, 'On') ||...
             strcmp(opts2.correct, 'ON')
 
@@ -143,16 +159,15 @@ for i = ii
             
             figure(f2) % navigate to the plot that shows interations on inversion
 
-            if chk_flag2
+            if chk_flag2 % repeat Tikhonov with new smoothing factor
                     [x_tk1, ~, ~, Gpo_inv_tk1] = ...
                         invert.tikhonov(Lb * A, Lb * b, lambda_tk1(i), 1);
                     Gpo_tk1 = inv(Gpo_inv_tk1);
+                    rN(i,1) = dist_tsi(i).A_tot / trapz(log10(d), x_tk1);
+                    x_tk1 = rN(i,1) * x_tk1;
+                    Gpo_tk1 = rN(i,1) .* Gpo_tk1;                    
             end
             
-            % plot Tikhonov's results based on the last assigned lambda
-            plt2_tk = hn.plotci_custom(d, x_tk1, Gpo_tk1, [],...
-                hex2rgb(clr2{1}), '-');
-            hold on
 
             % inversion based on Twomey-Markowski
             try % Twomey-Markowski might occasionally fail
@@ -161,16 +176,25 @@ for i = ii
             catch ME
                 x_twomark = NaN(length(d), 1);
             end
+
+            % correct Twomey-Markowski for concentration
+            rN(i,2) = dist_tsi(i).A_tot / trapz(log10(d), x_twomark);
+            x_twomark = rN(i,2) * x_twomark;
             
             % plot Twomey-Markowski's output (which is closest to TSI's inversion)
             plt2_twomark = hn.plotci_custom(d, x_twomark, [], [],...
-                hex2rgb(clr2{4}), '-');
+                hex2rgb(clr2{1}), '-');
+            hold on
+            
+            % plot TSI's inversion
+            plt2_tsi = hn.plotci_custom(dist_tsi(i).dm',...
+                dist_tsi(i).dn_dlogdm', [], [], hex2rgb(clr2{2}), '-');
             hold on
 
-            % plot TSI's inversion
-            rr(i) = max(dist_tsi(i).dn_dlogdm) / max(x_tk1);
-            plt2_tsi = hn.plotci_custom(dist_tsi(i).dm',...
-                dist_tsi(i).dn_dlogdm' / rr(i), [], [], hex2rgb(clr2{3}), '-');
+            % plot Tikhonov's results based on the last assigned lambda
+            plt2_tk = hn.plotci_custom(d, x_tk1, Gpo_tk1, [],...
+                hex2rgb(clr2{3}), '-');
+            
             
             % set the appearance
             set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
@@ -233,8 +257,8 @@ for i = ii
     nexttile(1) % non-log scales    
     
     % display the inverted mobility size distribution based on Tikhonov
-    plt1{i} =  hn.plotci_custom(d, x_tk1, Gpo_tk1, [], hex2rgb(clr1{i}),...
-        linstl{i});
+    plt1{i} =  hn.plotci_custom(d, x_tk1, Gpo_tk1, [],...
+        hex2rgb(clr1{i}), linstl{i});
     hold on
     
     % rigstr{i} = strrep(rigstr{i},'nof','n/f'); % minor label adjustment
@@ -243,30 +267,30 @@ for i = ii
     if i == ii(end)
         set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
             'TickLength', [0.02 0.02], 'XScale', 'log')    
-        xlim([15,1000])
+        xlim([15,950])
         xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
             'FontSize', 16)
         ylabel('$\mathrm{d}n/\mathrm{dlog}(d_\mathrm{m})$',...
             'interpreter', 'latex', 'FontSize', 16)
     end
-
+    
     nexttile(2) % log scales
-
+    
     % remove zero counts for plotting in log scale
     dm2{i} = d(x_tk1 > 0);
     dN2{i} = x_tk1(x_tk1 > 0);
     
     % plot nonzero scales for display in log-log scale
     opts1b.log = 'on';
-    hn.plotci_custom(dm2{i}, dN2{i}, Gpo_tk1, [], hex2rgb(clr1{i}),...
-        linstl{i}, opts1b)
+    hn.plotci_custom(dm2{i}, dN2{i}, Gpo_tk1, [],...
+        hex2rgb(clr1{i}), linstl{i}, opts1b)
     hold on
 
     % apply the log-log scale and other axis configurations
     if i == ii(end)
         set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
             'TickLength', [0.02 0.02], 'XScale', 'log', 'YScale', 'log')    
-        xlim([15,1000])
+        xlim([15,950])
         ylim([3e3 1.2 * max(cat(1,dN2{:}))])
         xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
             'FontSize', 16)
