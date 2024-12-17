@@ -13,7 +13,7 @@ tname0 = '13SEP24_SWEEP_ON_FUEL'; % parametric study on effect of fuel flow rate
 % tname0 = '23JUL24_SWEEP_ON_AIR'; % effect of change in air flow rate while equivalence ratio is constant
 % tname0 = '20JUL24_SWEEP_ON_NITROGEN'; % effect of change in premixed Nitrogen to fuel mass ratio 
 f_in_add = 'inputs\odias_params_new.xlsx'; % address of folder containing main user info
-opts2.correct = 'on'; % flag for whether reiterate the inversion
+opts2.correct = 'off'; % flag for whether reiterate the inversion
 
 %% read input files from the user containing details of SMPS data and settings for post-processing %%
 
@@ -76,11 +76,14 @@ dist_tsi_noninv = struct('fadd', cell(n_dat,1), 'tab0', cell(n_dat,1),...
     'A_tot', zeros(n_dat,1));
 
 % allocate space to Tikhonov inversion results
-dist_tk = struct('d', cell(n_dat,1), 'x', cell(n_dat,1),...
-    'Gpo', cell(n_dat,1), 'd_mode', cell(n_dat, 1),...
-    'd_gm', zeros(n_dat, 1), 'sigma_g', cell(n_dat, 1),...
-    'skw', zeros(n_dat, 1), 'n_tot', zeros(n_dat,1));
+dist_odias = struct('d', cell(n_dat,1), 'x_tk', cell(n_dat,1),...
+    'x_twomark', cell(n_dat,1), 'x', cell(n_dat,1),...
+    'Gpo_tk', cell(n_dat, 1), 'n_tot', zeros(n_dat,1),...
+    'd_mode', cell(n_dat, 1), 'd_gm', zeros(n_dat, 1),...
+    'sigma_g', cell(n_dat, 1), 'skw', zeros(n_dat, 1),...
+    'krts', zeros(n_dat, 1));
 
+    
 % assign class objects to be inverted 
 ii = 1 : n_dat;
 ii = ii(incld);
@@ -127,14 +130,14 @@ for i = ii
     % rigstr{i} = DAT.LABELADJ(rigstr{i});
     
     % reconstruct mobility points
-    dist_tk(i).d = logspace(log10(d_lim_1(i)), log10(d_lim_2(i)), 500)';
+    dist_odias(i).d = logspace(log10(d_lim_1(i)), log10(d_lim_2(i)), 500)';
 
     % correct sheath flows
     prop.Q_c = dat(i).Qsh_dma;
     prop.Q_m = dat(i).Qsh_dma;
 
     % build inversion kernel
-    A = kernel.gen_smps((dat(i).dm)', dist_tk(i).d, [], prop);
+    A = kernel.gen_smps((dat(i).dm)', dist_odias(i).d, [], prop);
     
     % assign mean and std of particle counts
     b = (dat(i).dN)';
@@ -143,18 +146,31 @@ for i = ii
     disp(' ');
 
     % perform inversion using 1st order Tikhonov
-    [dist_tk(i).x, ~, ~, Gpo_inv_tk1] = ...
+    [dist_odias(i).x_tk, ~, ~, Gpo_inv_tk1] = ...
         invert.tikhonov(Lb * A, Lb * b, lambda_tk1(i), 1);
-    dist_tk(i).Gpo = inv(Gpo_inv_tk1);
+    dist_odias(i).Gpo_tk = inv(Gpo_inv_tk1);
 
     % get and apply the correction factor for concentration in Tikhonov's method
     rN(i,1) =  dist_tsi_inv(i).A_tot /...
-        trapz(log10(dist_tk(i).d((dist_tk(i).d <= max(dat(i).dm)) &...
-        (dist_tk(i).d >= min(dat(i).dm)))),...
-        dist_tk(i).x((dist_tk(i).d <= max(dat(i).dm)) &...
-        (dist_tk(i).d >= min(dat(i).dm))));
-    dist_tk(i).x = rN(i,1) * dist_tk(i).x;
-    dist_tk(i).Gpo = rN(i,1) .* dist_tk(i).Gpo;
+        trapz(log10(dist_odias(i).d((dist_odias(i).d <= max(dat(i).dm)) &...
+        (dist_odias(i).d >= min(dat(i).dm)))),...
+        dist_odias(i).x_tk((dist_odias(i).d <= max(dat(i).dm)) &...
+        (dist_odias(i).d >= min(dat(i).dm))));
+    dist_odias(i).x_tk = rN(i,1) * dist_odias(i).x_tk;
+    dist_odias(i).Gpo_tk = rN(i,1) .* dist_odias(i).Gpo_tk;
+
+    % inversion based on Twomey-Markowski
+    xi = invert.get_init(Lb * A, Lb * b, dist_odias(i).d, dat(i).dm);
+    dist_odias(i).x_twomark = invert.twomark(Lb * A, Lb * b, length(xi),...
+        xi);
+
+    % correct Twomey-Markowski for concentration
+    rN(i,2) = dist_tsi_inv(i).A_tot /...
+        trapz(log10(dist_odias(i).d((dist_odias(i).d <= max(dat(i).dm))...
+        & (dist_odias(i).d >= min(dat(i).dm)))),...
+        dist_odias(i).x_twomark((dist_odias(i).d <= max(dat(i).dm)) &...
+        (dist_odias(i).d >= min(dat(i).dm))));
+    dist_odias(i).x_twomark = rN(i,2) * dist_odias(i).x_twomark;
     
     if strcmp(opts2.correct, 'on') || strcmp(opts2.correct, 'On') ||...
             strcmp(opts2.correct, 'ON')
@@ -170,39 +186,40 @@ for i = ii
         
         while chk_flag1
             
-            figure(f2) % navigate to the plot that shows interations on inversion
+            figure(f2) % navigate to the plot that shows iterations on inversion
 
             if chk_flag2 % repeat Tikhonov with new smoothing factor
-                    dist_tk(i).d = logspace(log10(d_lim_1(i)),...
+                    dist_odias(i).d = logspace(log10(d_lim_1(i)),...
                         log10(d_lim_2(i)), 500)';
-                    A = kernel.gen_smps((dat(i).dm)', dist_tk(i).d, [], prop);
-                    [dist_tk(i).x, ~, ~, Gpo_inv_tk1] = ...
+                    A = kernel.gen_smps((dat(i).dm)', dist_odias(i).d, [], prop);
+                    [dist_odias(i).x_tk, ~, ~, Gpo_inv_tk1] = ...
                         invert.tikhonov(Lb * A, Lb * b, lambda_tk1(i), 1);
-                    dist_tk(i).Gpo = inv(Gpo_inv_tk1);
+                    dist_odias(i).Gpo_tk = inv(Gpo_inv_tk1);
                     rN(i,1) = dist_tsi_inv(i).A_tot /...
-                        trapz(log10(dist_tk(i).d((dist_tk(i).d <=...
-                        max(dat(i).dm)) & (dist_tk(i).d >= min(dat(i).dm)))),...
-                        dist_tk(i).x((dist_tk(i).d <= max(dat(i).dm)) &...
-                        (dist_tk(i).d >= min(dat(i).dm))));
-                    dist_tk(i).x = rN(i,1) * dist_tk(i).x;
-                    dist_tk(i).Gpo = rN(i,1) .* dist_tk(i).Gpo;                    
+                        trapz(log10(dist_odias(i).d((dist_odias(i).d <=...
+                        max(dat(i).dm)) & (dist_odias(i).d >= min(dat(i).dm)))),...
+                        dist_odias(i).x_tk((dist_odias(i).d <= max(dat(i).dm)) &...
+                        (dist_odias(i).d >= min(dat(i).dm))));
+                    dist_odias(i).x_tk = rN(i,1) * dist_odias(i).x_tk;
+                    dist_odias(i).Gpo_tk = rN(i,1) .* dist_odias(i).Gpo_tk;
+                    
+                    % repeat Twomey-Markowski (d might have changed)
+                    xi = invert.get_init(Lb * A, Lb * b, dist_odias(i).d,...
+                        dat(i).dm);
+                    dist_odias(i).x_twomark = invert.twomark(Lb * A,...
+                        Lb * b, length(xi), xi);
+                    rN(i,2) = dist_tsi_inv(i).A_tot /...
+                        trapz(log10(dist_odias(i).d((dist_odias(i).d <=...
+                        max(dat(i).dm)) & (dist_odias(i).d >= min(dat(i).dm)))),...
+                        dist_odias(i).x_twomark((dist_odias(i).d <=...
+                        max(dat(i).dm)) & (dist_odias(i).d >= min(dat(i).dm))));
+                    dist_odias(i).x_twomark = rN(i,2) *...
+                        dist_odias(i).x_twomark;
+                    
             end
-            
-
-            % inversion based on Twomey-Markowski
-            xi = invert.get_init(Lb * A, Lb * b, dist_tk(i).d, dat(i).dm);
-            x_twomark = invert.twomark(Lb * A, Lb * b, length(xi), xi);
-
-            % correct Twomey-Markowski for concentration
-            rN(i,2) = dist_tsi_inv(i).A_tot /...
-                trapz(log10(dist_tk(i).d((dist_tk(i).d <= max(dat(i).dm))...
-                & (dist_tk(i).d >= min(dat(i).dm)))),...
-                x_twomark((dist_tk(i).d <= max(dat(i).dm)) &...
-                (dist_tk(i).d >= min(dat(i).dm))));
-            x_twomark = rN(i,2) * x_twomark;
-            
+                        
             % plot Twomey-Markowski's output (which is closest to TSI's inversion)
-            plt2_twomark = hn.plotci_custom(dist_tk(i).d, x_twomark, [],...
+            plt2_twomark = hn.plotci_custom(dist_odias(i).d, x_twomark, [],...
                 [], hex2rgb(clr2{1}), '-');
             hold on
             
@@ -217,8 +234,8 @@ for i = ii
             hold on
             
             % plot Tikhonov's results based on the last assigned lambda
-            plt2_tk = hn.plotci_custom(dist_tk(i).d, dist_tk(i).x,...
-                dist_tk(i).Gpo, [], hex2rgb(clr2{3}), '-');
+            plt2_tk = hn.plotci_custom(dist_odias(i).d, dist_odias(i).x_tk,...
+                dist_odias(i).Gpo_tk, [], hex2rgb(clr2{3}), '-');
             
             
             % set the appearance
@@ -295,17 +312,20 @@ for i = ii
         end
         
     end
+    
+    % assign final inversion chosen for plotting
+    dist_odias(i).x = dist_odias(i).x_tk;
 
     % use Twomey-Markowski's results for counts that are out of SMPS range
-    dist_tk(i).x(dist_tk(i).d > max(dat(i).dm)) =...
-        x_twomark(dist_tk(i).d > max(dat(i).dm));
+    dist_odias(i).x(dist_odias(i).d > max(dat(i).dm)) =...
+        dist_odias(i).x_twomark(dist_odias(i).d > max(dat(i).dm));
 
     figure(f1) % navigate to final plot for size distribution
     nexttile(1) % non-log scales    
     
     % display the inverted mobility size distribution based on Tikhonov
-    plt1{i} =  hn.plotci_custom(dist_tk(i).d, dist_tk(i).x,...
-        dist_tk(i).Gpo, [], hex2rgb(clr1{i}), linstl{i});
+    plt1{i} =  hn.plotci_custom(dist_odias(i).d, dist_odias(i).x,...
+        dist_odias(i).Gpo_tk, [], hex2rgb(clr1{i}), linstl{i});
     hold on
     
     % rigstr{i} = strrep(rigstr{i},'nof','n/f'); % minor label adjustment
@@ -317,19 +337,19 @@ for i = ii
         xlim([15,950])
         xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
             'FontSize', 16)
-        ylabel('$\mathrm{d}n/\mathrm{dlog}(d_\mathrm{m} [\#/cm^3])$',...
+        ylabel('$\mathrm{d}n/\mathrm{dlog}(d_\mathrm{m} [\#/\mathrm{cm}^3])$',...
             'interpreter', 'latex', 'FontSize', 16)
     end
     
     nexttile(2) % log scales
     
     % remove zero counts for plotting in log scale
-    dm2{i} = dist_tk(i).d(dist_tk(i).x > 0);
-    dN2{i} = dist_tk(i).x(dist_tk(i).x > 0);
+    dm2{i} = dist_odias(i).d(dist_odias(i).x > 0);
+    dN2{i} = dist_odias(i).x(dist_odias(i).x > 0);
     
     % plot nonzero scales for display in log-log scale
     opts1b.log = 'on';
-    hn.plotci_custom(dm2{i}, dN2{i}, dist_tk(i).Gpo, [],...
+    hn.plotci_custom(dm2{i}, dN2{i}, dist_odias(i).Gpo_tk, [],...
         hex2rgb(clr1{i}), linstl{i}, opts1b)
     hold on
 
@@ -338,36 +358,41 @@ for i = ii
         set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
             'TickLength', [0.02 0.02], 'XScale', 'log', 'YScale', 'log')    
         xlim([15,950])
-        ylim([3e3 1.2 * max(cat(1,dN2{:}))])
+        ylim([-Inf 1.2 * max(cat(1,dN2{:}))])
         xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
             'FontSize', 16)
-        ylabel('$\mathrm{d}n/\mathrm{dlog}(d_\mathrm{m}) [\#/cm^3]$',...
+        ylabel('$\mathrm{d}n/\mathrm{dlog}(d_\mathrm{m}) [\#/\mathrm{cm}^3]$',...
             'interpreter', 'latex', 'FontSize', 16)
+
+        % ask user to adjust y axis in log scale
+        ymin_log = str2double(inputdlg('Please enter minimum of vertical axis in Log scale',...
+            'Adjust axis', [1 50], {'1e3'}));
+        ylim([ymin_log 1.2 * max(cat(1,dN2{:}))])
     end
 
     % find local modes of distribution and remove noise
-    [dn_dlogd_mode, dist_tk(i).d_mode] = findpeaks(dist_tk(i).x,...
-        dist_tk(i).d); 
-    dist_tk(i).d_mode(dn_dlogd_mode / max(dn_dlogd_mode) < 0.1) = [];
+    [dn_dlogd_mode, dist_odias(i).d_mode] = findpeaks(dist_odias(i).x_tk,...
+        dist_odias(i).d); 
+    dist_odias(i).d_mode(dn_dlogd_mode / max(dn_dlogd_mode) < 0.1) = [];
 
     % find geometric mean (GM) and geometric standard deviation (GSD)
-    w = dist_tk(i).x / sum(dist_tk(i).x); % normalize dn/dlog(d) to get weights
-    dist_tk(i).d_gm = 10^(sum(w .* log10(dist_tk(i).d))); % GM
-    dist_tk(i).sigma_g = 10^(sqrt(sum(w .* (log10(dist_tk(i).d) -...
-        log10(dist_tk(i).d_gm)).^2))); % GSD
+    w = dist_odias(i).x_tk / sum(dist_odias(i).x_tk); % normalize dn/dlog(d) to get weights
+    dist_odias(i).d_gm = 10^(sum(w .* log10(dist_odias(i).d))); % GM
+    dist_odias(i).sigma_g = 10^(sqrt(sum(w .* (log10(dist_odias(i).d) -...
+        log10(dist_odias(i).d_gm)).^2))); % GSD
 
     % total concentration (i.e. area below the size distribution curve)
-    dist_tk(i).n_tot = trapz(log10(dist_tk(i).d), dist_tk(i).x);
+    dist_odias(i).n_tot = trapz(log10(dist_odias(i).d), dist_odias(i).x_tk);
     
     % skewness in log-space (0 for a normal distribution, positive for...
     % ...right-skewed, negative for left-skewed)
-    dist_tk(i).skw = sum(w .* (log10(dist_tk(i).d) -...
-        log10(dist_tk(i).d_gm)).^3) / ((log10(dist_tk(i).sigma_g))^3);
+    dist_odias(i).skw = sum(w .* (log10(dist_odias(i).d) -...
+        log10(dist_odias(i).d_gm)).^3) / ((log10(dist_odias(i).sigma_g))^3);
     
     % skewness in log-space (3 for a normal distribution, > 3 for...
     % ...heavy tails, < 3 for light tails)
-    dist_tk(i).krts = sum(w .* (log10(dist_tk(i).d) -...
-        log10(dist_tk(i).d_gm)).^4) / ((log10(dist_tk(i).sigma_g))^4);
+    dist_odias(i).krts = sum(w .* (log10(dist_odias(i).d) -...
+        log10(dist_odias(i).d_gm)).^4) / ((log10(dist_odias(i).sigma_g))^4);
 
     tools.textbar([i, length(ii)]); % update textbar
 end
@@ -377,4 +402,27 @@ lgd1 = legend(cat(2, plt1{:}), cat(2, rigstr(:)), 'interpreter', 'latex',...
 lgd1.Layout.Tile = 'south';
 lgd1.NumColumns = 2;
 
-close(f2)
+% close the inversion iteration figure if present
+if exist('f2', 'var'); close(f2); end
+
+%% save figures and data
+
+% make directory for results to be saved
+fdir_out = strcat('outputs\', tname0);
+if ~isfolder(fdir_out); mkdir(fdir_out); end
+
+% customize the name of directory
+fname_out = strcat(tname0, '_', datestr(datetime('now')));
+fname_out = regexprep(fname_out, ':', '-');
+fname_out = regexprep(fname_out, ' ', '_');
+
+% save individual inverted size distributions
+saveas(f1, strcat(fdir_out, '\Fig1_', fname_out, '.fig'));
+
+% save MATLAB worspace
+save(strcat(fdir_out, '\', fname_out, '.mat'));
+
+
+
+
+
