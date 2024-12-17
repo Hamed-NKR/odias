@@ -8,7 +8,10 @@ addpath cmap; % load cmap library
 
 %% user's inputs to this script %%
 
-tname0 = '13SEP24_SWEEP_ON_FUEL'; % name of excel datasheet for cases to be imported
+% name of excel datasheet for cases to be imported
+tname0 = '13SEP24_SWEEP_ON_FUEL'; % parametric study on effect of fuel flow rate (i.e. change of equivalence ratio)
+% tname0 = '23JUL24_SWEEP_ON_AIR'; % effect of change in air flow rate while equivalence ratio is constant
+% tname0 = '20JUL24_SWEEP_ON_NITROGEN'; % effect of change in premixed Nitrogen to fuel mass ratio 
 f_in_add = 'inputs\odias_params_new.xlsx'; % address of folder containing main user info
 opts2.correct = 'on'; % flag for whether reiterate the inversion
 
@@ -76,7 +79,7 @@ dist_tsi_noninv = struct('fadd', cell(n_dat,1), 'tab0', cell(n_dat,1),...
 dist_tk = struct('d', cell(n_dat,1), 'x', cell(n_dat,1),...
     'Gpo', cell(n_dat,1), 'd_mode', cell(n_dat, 1),...
     'd_gm', zeros(n_dat, 1), 'sigma_g', cell(n_dat, 1),...
-    'n_tot', zeros(n_dat,1));
+    'skw', zeros(n_dat, 1), 'n_tot', zeros(n_dat,1));
 
 % assign class objects to be inverted 
 ii = 1 : n_dat;
@@ -349,12 +352,22 @@ for i = ii
 
     % find geometric mean (GM) and geometric standard deviation (GSD)
     w = dist_tk(i).x / sum(dist_tk(i).x); % normalize dn/dlog(d) to get weights
-    dist_tk(i).d_gm = exp(sum(w .* log(dist_tk(i).d))); % GM
-    dist_tk(i).sigma_g = exp(sqrt(sum(w .* (log(dist_tk(i).d) -...
-        log(dist_tk(i).d_gm)).^2))); % GSD
+    dist_tk(i).d_gm = 10^(sum(w .* log10(dist_tk(i).d))); % GM
+    dist_tk(i).sigma_g = 10^(sqrt(sum(w .* (log10(dist_tk(i).d) -...
+        log10(dist_tk(i).d_gm)).^2))); % GSD
 
     % total concentration (i.e. area below the size distribution curve)
     dist_tk(i).n_tot = trapz(log10(dist_tk(i).d), dist_tk(i).x);
+    
+    % skewness in log-space (0 for a normal distribution, positive for...
+    % ...right-skewed, negative for left-skewed)
+    dist_tk(i).skw = sum(w .* (log10(dist_tk(i).d) -...
+        log10(dist_tk(i).d_gm)).^3) / ((log10(dist_tk(i).sigma_g))^3);
+    
+    % skewness in log-space (3 for a normal distribution, > 3 for...
+    % ...heavy tails, < 3 for light tails)
+    dist_tk(i).krts = sum(w .* (log10(dist_tk(i).d) -...
+        log10(dist_tk(i).d_gm)).^4) / ((log10(dist_tk(i).sigma_g))^4);
 
     tools.textbar([i, length(ii)]); % update textbar
 end
