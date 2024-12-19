@@ -9,11 +9,11 @@ addpath cmap; % load cmap library
 %% user's inputs to this script %%
 
 % name of excel datasheet for cases to be imported
-tname0 = '13SEP24_SWEEP_ON_FUEL'; % parametric study on effect of fuel flow rate (i.e. change of equivalence ratio)
+% tname0 = '13SEP24_SWEEP_ON_FUEL'; % parametric study on effect of fuel flow rate (i.e. change of equivalence ratio)
 % tname0 = '23JUL24_SWEEP_ON_AIR'; % effect of change in air flow rate while equivalence ratio is constant
-% tname0 = '20JUL24_SWEEP_ON_NITROGEN'; % effect of change in premixed Nitrogen to fuel mass ratio 
+tname0 = '20JUL24_SWEEP_ON_NITROGEN'; % effect of change in premixed Nitrogen to fuel mass ratio 
 f_in_add = 'inputs\odias_params_new.xlsx'; % address of folder containing main user info
-opts2.correct = 'off'; % flag for whether reiterate the inversion
+opts2.correct = 'on'; % flag for whether reiterate the inversion
 
 %% read input files from the user containing details of SMPS data and settings for post-processing %%
 
@@ -219,8 +219,8 @@ for i = ii
             end
                         
             % plot Twomey-Markowski's output (which is closest to TSI's inversion)
-            plt2_twomark = hn.plotci_custom(dist_odias(i).d, x_twomark, [],...
-                [], hex2rgb(clr2{1}), '-');
+            plt2_twomark = hn.plotci_custom(dist_odias(i).d,...
+                dist_odias(i).x_twomark, [], [], hex2rgb(clr2{1}), '-');
             hold on
             
             % plot TSI's non-corrected data
@@ -349,8 +349,9 @@ for i = ii
     
     % plot nonzero scales for display in log-log scale
     opts1b.log = 'on';
-    hn.plotci_custom(dm2{i}, dN2{i}, dist_odias(i).Gpo_tk, [],...
-        hex2rgb(clr1{i}), linstl{i}, opts1b)
+    hn.plotci_custom(dm2{i}, dN2{i},...
+        dist_odias(i).Gpo_tk(dist_odias(i).x > 0, dist_odias(i).x > 0),...
+        [], hex2rgb(clr1{i}), linstl{i}, opts1b)
     hold on
 
     % apply the log-log scale and other axis configurations
