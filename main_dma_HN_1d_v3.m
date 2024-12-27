@@ -10,16 +10,18 @@ addpath cmap; % load cmap library
 
 % assign name of excel datasheet for cases to be imported
 % tname0 = '13SEP24_SWEEP_ON_FUEL'; % parametric study on effect of...
-    % ...fuel flow rate (i.e. change of equivalence ratio)
-tname0 = '23JUL24_SWEEP_ON_AIR'; % effect of change in air flow rate...
-    % ...while equivalence ratio is constant
+    % % ...fuel flow rate (i.e. change of equivalence ratio)
 % tname0 = '20JUL24_SWEEP_ON_NITROGEN'; % effect of change in premixed...
-    % ...Nitrogen to fuel mass ratio 
+    % % ...Nitrogen to fuel mass ratio 
+% tname0 = '23JUL24_SWEEP_ON_AIR'; % effect of change in air flow rate...
+    % % ...while equivalence ratio is constant
+tname0 = 'ET017_NIT013_AIR16_DIST'; % size distributions for...
+    % ...favorite burner condition
 
 % address of folder containing main user info
 f_in_add = 'inputs\odias_params_new.xlsx';
 
-opts2.correct = 'on'; % flag for whether reiterate the inversion
+opts2.correct = 'off'; % flag for whether reiterate the inversion
 
 %% read input files from the user containing details of SMPS data and settings for post-processing %%
 
@@ -28,9 +30,9 @@ opts_load = setvartype(opts_load, 'char'); % set type of data to be...
     % ...imported from the user-info excel file
 intab = readtable(f_in_add, 'UseExcel', true, 'Sheet', tname0); % read the excel file
 fname = intab.fname{1}; % identify name of the file which contains...
-% ...information of smps files having raw particle counts
+    % ...information of smps files having raw particle counts
 tname = intab.tname{1}; % name of datasheet where the above smps...
-% ...information file is located
+    % ...information file is located
 fname_lbl = intab.fname_lbl{1}; % label for the data to be imported
 n_dat = intab.n_dat(1); % number of test cases to be examined
 lambda_tk1 = intab.lambda_tk1(1:n_dat); % a parameter that controls...
@@ -168,7 +170,7 @@ for i = ii
     [dist_odias(i).x_tk1, ~, ~, Gpo_inv_tk1] = ...
         invert.tikhonov(Lb * A, Lb * b, lambda_tk1(i), 1);
     dist_odias(i).Gpo_tk1 = inv(Gpo_inv_tk1);
-
+    
     % get and apply the correction factor for concentration in Tikhonov's...
         % ...1st-order method
     rN(i,1) =  dist_tsi_inv(i).A_tot /...
@@ -406,93 +408,96 @@ for i = ii
             
         end
         
-    end
-
-    % extents of TSI mobility setpoints
-    dmax_i = max(dat(i).dm);
-    dmin_i = min(dat(i).dm);
-
-    % indices of the constructed setpoints that fall within the...
-        % ...experimental setpoints
-    inds_in = (dist_odias(i).d <= dmax_i) & (dist_odias(i).d >= dmin_i);
-
-    % determine final inversion to be output for within the range of TSI...
-        % ...detection    
-    response2c = listdlg('PromptString', {'Select method for output within',...
-        'the TSI detection range', ' '}, 'SelectionMode','single',...
-        'ListString', {'Tikhonov 1st order', 'Tikhonov 2nd order',...
-        'Tikhonov 2nd order, 2-steps'});
+        % extents of TSI mobility setpoints
+        dmax_i = max(dat(i).dm);
+        dmin_i = min(dat(i).dm);
     
-    % terminate the program if hit cancel
-    if isempty(response2c); return; end
+        % indices of the constructed setpoints that fall within the...
+            % ...experimental setpoints
+        inds_in = (dist_odias(i).d <= dmax_i) & (dist_odias(i).d >= dmin_i);
     
-    switch response2c
-        case 1
-            dist_odias(i).x(inds_in) = dist_odias(i).x_tk1(inds_in);
-            Gpo0 = dist_odias(i).Gpo_tk1;
-            Gpo00 = dist_odias(i).Gpo_tk1(inds_in,inds_in);
-            
-        case 2
-            dist_odias(i).x(inds_in) = dist_odias(i).x_tk2(inds_in);
-            Gpo0 = dist_odias(i).Gpo_tk2;
-            Gpo00 = dist_odias(i).Gpo_tk2(inds_in,inds_in);
-
-        case 3
-            dist_odias(i).x(inds_in) = dist_odias(i).x_tk22(inds_in);
-            Gpo0 = dist_odias(i).Gpo_tk22;
-            Gpo00 = dist_odias(i).Gpo_tk22(inds_in,inds_in);
-            
-    end
-
-    % indices of the constructed setpoints that fall outside the...
-        % ...experimental setpoints    
-    inds_out = (dist_odias(i).d > dmax_i) | (dist_odias(i).d < dmin_i);
+        % determine final inversion to be output for within the range of TSI...
+            % ...detection    
+        response2c = listdlg('PromptString', {'Select method for output within',...
+            'the TSI detection range', ' '}, 'SelectionMode','single',...
+            'ListString', {'Tikhonov 1st order', 'Tikhonov 2nd order',...
+            'Tikhonov 2nd order, 2-steps'});
         
-    response2d = listdlg('PromptString', {'Select method for output outside',...
-        'the TSI detection range', ' '}, 'SelectionMode','single',...
-        'ListString', {'Tikhonov 1st order', 'Tikhonov 2nd order',...
-        'Tikhonov 2nd order, 2-steps', 'Twomey-Markowski'});
+        % terminate the program if hit cancel
+        if isempty(response2c); return; end
+        
+        switch response2c
+            case 1
+                dist_odias(i).x(inds_in) = dist_odias(i).x_tk1(inds_in);
+                Gpo0 = dist_odias(i).Gpo_tk1;
+                Gpo00 = dist_odias(i).Gpo_tk1(inds_in,inds_in);
+                
+            case 2
+                dist_odias(i).x(inds_in) = dist_odias(i).x_tk2(inds_in);
+                Gpo0 = dist_odias(i).Gpo_tk2;
+                Gpo00 = dist_odias(i).Gpo_tk2(inds_in,inds_in);
     
-    % terminate the program if hit cancel
-    if isempty(response2d); return; end
+            case 3
+                dist_odias(i).x(inds_in) = dist_odias(i).x_tk22(inds_in);
+                Gpo0 = dist_odias(i).Gpo_tk22;
+                Gpo00 = dist_odias(i).Gpo_tk22(inds_in,inds_in);
+                
+        end
     
-    switch response2d
-        case 1
-            dist_odias(i).x(inds_out) = dist_odias(i).x_tk1(inds_out);
-            dist_odias(i).Gpo = dist_odias(i).Gpo_tk1;
+        % indices of the constructed setpoints that fall outside the...
+            % ...experimental setpoints    
+        inds_out = (dist_odias(i).d > dmax_i) | (dist_odias(i).d < dmin_i);
             
-        case 2
-            dist_odias(i).x(inds_out) = dist_odias(i).x_tk2(inds_out);
-            dist_odias(i).Gpo = dist_odias(i).Gpo_tk2;
-            
-        case 3
-            dist_odias(i).x(inds_out) = dist_odias(i).x_tk22(inds_out);
-            dist_odias(i).Gpo = dist_odias(i).Gpo_tk22;
-            
-        case 4
-            dist_odias(i).x(inds_out) = dist_odias(i).x_twomark(inds_out);
-            
-    end
-
-    % terminate the program if hit cancel
-    if isempty(response2d); return; end    
+        response2d = listdlg('PromptString', {'Select method for output outside',...
+            'the TSI detection range', ' '}, 'SelectionMode','single',...
+            'ListString', {'Tikhonov 1st order', 'Tikhonov 2nd order',...
+            'Tikhonov 2nd order, 2-steps', 'Twomey-Markowski'});
+        
+        % terminate the program if hit cancel
+        if isempty(response2d); return; end
+        
+        switch response2d
+            case 1
+                dist_odias(i).x(inds_out) = dist_odias(i).x_tk1(inds_out);
+                dist_odias(i).Gpo = dist_odias(i).Gpo_tk1;
+                
+            case 2
+                dist_odias(i).x(inds_out) = dist_odias(i).x_tk2(inds_out);
+                dist_odias(i).Gpo = dist_odias(i).Gpo_tk2;
+                
+            case 3
+                dist_odias(i).x(inds_out) = dist_odias(i).x_tk22(inds_out);
+                dist_odias(i).Gpo = dist_odias(i).Gpo_tk22;
+                
+            case 4
+                dist_odias(i).x(inds_out) = dist_odias(i).x_twomark(inds_out);
+                
+        end
     
-    if response2d == 4
-        dist_odias(i).Gpo = Gpo0;
+        % terminate the program if hit cancel
+        if isempty(response2d); return; end    
+        
+        if response2d == 4
+            dist_odias(i).Gpo = Gpo0;
+        
+        else
+            dist_odias(i).Gpo(inds_in,inds_in) = Gpo00;
+        end
     
-    else
-        dist_odias(i).Gpo(inds_in,inds_in) = Gpo00;
-    end
-
-    % adjust the direction of output counts vector
-    dist_odias(i).x = dist_odias(i).x'; 
-    
-    % clear figure for selecting inversion method
-    if strcmp(opts2.correct, 'on') || strcmp(opts2.correct, 'On') ||...
-            strcmp(opts2.correct, 'ON')
+        % adjust the direction of output counts vector
+        dist_odias(i).x = dist_odias(i).x'; 
+        
+        % clear figure for selecting inversion method
         clf(f2, 'reset')
-    end
+
+    else
+
+        % if not asking from user, use Tikhonov's 2nd order as final output
+        dist_odias(i).x = dist_odias(i).x_tk2;
+        dist_odias(i).Gpo = dist_odias(i).Gpo_tk2;
         
+    end
+
     figure(f1) % navigate to final plot for size distribution
     nexttile(1) % non-log scales    
     
@@ -541,7 +546,12 @@ for i = ii
         % ask user to adjust y axis in log scale
         ymin_log = str2double(inputdlg('Please enter minimum of vertical axis in Log scale',...
             'Adjust axis', [1 50], {'1e3'}));
-        ylim([ymin_log 1.2 * max(cat(1,dN2{:}))])
+        if isempty(ymin_log)
+            return % stop code execution if hit cancel
+        else
+            ylim([ymin_log 1.2 * max(cat(1,dN2{:}))]) % adjust y axis in...
+                % ...log scale
+        end
     end
 
     % find local modes of distribution and remove noise
@@ -568,10 +578,10 @@ for i = ii
     dist_odias(i).krts = sum(w .* (log10(dist_odias(i).d) -...
         log10(dist_odias(i).d_gm)).^4) / ((log10(dist_odias(i).sigma_g))^4);
 
-    tools.textbar([i, length(ii)]); % update textbar
+    tools.textbar([find(ii == i), length(ii)]); % update textbar
 end
 
-lgd1 = legend(cat(2, plt1{:}), cat(2, rigstr(:)), 'interpreter', 'latex',...
+lgd1 = legend(cat(2, plt1{:}), cat(2, rigstr(ii)), 'interpreter', 'latex',...
     'FontSize', 12);
 lgd1.Layout.Tile = 'south';
 lgd1.NumColumns = 2;
@@ -595,8 +605,5 @@ saveas(f1, strcat(fdir_out, '\Fig1_', fname_out, '.fig'));
 
 % save MATLAB worspace
 save(strcat(fdir_out, '\', fname_out, '.mat'));
-
-
-
 
 
