@@ -21,7 +21,7 @@ tname0 = 'ET017_NIT013_AIR16_DIST'; % size distributions for...
 % address of folder containing main user info
 f_in_add = 'inputs\odias_params_new.xlsx';
 
-opts2.correct = 'off'; % flag for whether reiterate the inversion
+opts2.correct = 'on'; % flag for whether reiterate the inversion
 
 %% read input files from the user containing details of SMPS data and settings for post-processing %%
 
@@ -29,24 +29,53 @@ opts_load = detectImportOptions(f_in_add);
 opts_load = setvartype(opts_load, 'char'); % set type of data to be...
     % ...imported from the user-info excel file
 intab = readtable(f_in_add, 'UseExcel', true, 'Sheet', tname0); % read the excel file
+
 fname = intab.fname{1}; % identify name of the file which contains...
     % ...information of smps files having raw particle counts
 tname = intab.tname{1}; % name of datasheet where the above smps...
     % ...information file is located
 fname_lbl = intab.fname_lbl{1}; % label for the data to be imported
 n_dat = intab.n_dat(1); % number of test cases to be examined
-lambda_tk1 = intab.lambda_tk1(1:n_dat); % a parameter that controls...
+
+ii = 1 : n_dat; % initially all data are read
+
+lambda_tk1 = intab.lambda_tk1(ii); % a parameter that controls...
     % ...smoothing level in first-order Tikhonov method
-lambda_tk2 = intab.lambda_tk2(1:n_dat); % smoothing in 2nd-order Tikhonov
-lambda_tk22 = intab.lambda_tk22(1:n_dat); % 2nd-order Tikhonov, two-step
-d_lim_1 = intab.d_lim_1(1:n_dat); % lower limit on mobility diameter (for inversion)
-d_lim_2 = intab.d_lim_2(1:n_dat); % upper limit on mobility diameter
-clr1 = intab.clr(1:n_dat); % assign color for plot lines
-linstl = intab.stl(1:n_dat); % assign line style for plots
-dm_rowid = intab.dm_rowid(1:n_dat); % row id in SMPS file that...
+lambda_tk2 = intab.lambda_tk2(ii); % smoothing in 2nd-order Tikhonov
+lambda_ed = intab.lambda_ed(ii); % smoothing by exponential distance
+d_lim_1 = intab.d_lim_1(ii); % lower limit on mobility diameter (for inversion)
+d_lim_2 = intab.d_lim_2(ii); % upper limit on mobility diameter
+clr1 = intab.clr(ii); % assign color for plot lines
+linstl = intab.stl(ii); % assign line style for plots
+dm_rowid = intab.dm_rowid(ii); % row id in SMPS file that...
     % ...corresponds to mobility setpoints
-incld = intab.incld(1:n_dat); % determine whether the class member...
+incld = intab.incld(ii); % determine whether the class member...
     % ...(data case) undergoes inversion
+
+% assign class objects to be inverted 
+ii = ii(incld);
+
+% group similar data (if input by user) for possible later averaging and...
+    % ...colorcoding
+if ismember('group', fieldnames(intab))
+
+    grp = intab.group(ii); % load grouping indices
+
+    % find unique group indices
+    uniq_grp = unique(grp(ii));
+
+    n_grp = numel(uniq_grp); % number of unique groups
+    
+    % initialize placeholders for indices of datasets corresponding to...
+        % ...each group
+    ind_grp = cell(n_grp, 1);
+    
+    % find indices of members for each group
+    for j = 1 : n_grp
+        ind_grp{j} = find(grp(ii) == uniq_grp(j));
+    end
+
+end
 
 %% initialize class objects of raw SMPS data %%
 
@@ -72,7 +101,7 @@ plt1 = cell(n_dat,1); % placeholder to store plots for assigning legends
 % store initial smoothing and size parameters for Tikhonov inversion
 lambda_tk1_0 = lambda_tk1;
 lambda_tk2_0 = lambda_tk2;
-lambda_tk22_0 = lambda_tk22;
+lambda_ed_0 = lambda_ed;
 d_lim_1_0 = d_lim_1;
 d_lim_2_0 = d_lim_2;
 
@@ -97,14 +126,10 @@ dist_odias = struct('d', cell(n_dat,1), 'x', cell(n_dat,1),...
     'Gpo', cell(n_dat, 1), 'x_twomark', cell(n_dat,1),...
     'x_tk1', cell(n_dat,1), 'Gpo_tk1', cell(n_dat, 1),...
     'x_tk2', cell(n_dat,1), 'Gpo_tk2', cell(n_dat, 1),...
-    'x_tk22', cell(n_dat,1), 'Gpo_tk22', cell(n_dat, 1),...
+    'x_ed', cell(n_dat,1), 'Gpo_ed', cell(n_dat, 1),...
     'n_tot', zeros(n_dat,1), 'd_mode', cell(n_dat, 1),...
     'd_gm', zeros(n_dat, 1), 'sigma_g', cell(n_dat, 1),...
     'skw', zeros(n_dat, 1), 'krts', zeros(n_dat, 1));
-
-% assign class objects to be inverted 
-ii = 1 : n_dat;
-ii = ii(incld);
 
 % define a multiplier to correct for conversion issues of inversion algorithm
 rN = zeros(n_dat,4); % first column: Tikhonov 1st order,...
@@ -166,6 +191,26 @@ for i = ii
 
     disp(' ');
 
+    % Twomey-Markowski's inversion
+    xi = invert.get_init(Lb * A, Lb * b, dist_odias(i).d, dat(i).dm);
+    dist_odias(i).x_twomark = invert.twomark(Lb * A, Lb * b, length(xi),...
+        xi);
+
+    % correct Twomey-Markowski for concentration
+    rN(i,4) = dist_tsi_inv(i).A_tot /...
+        trapz(log10(dist_odias(i).d((dist_odias(i).d <= max(dat(i).dm))...
+        & (dist_odias(i).d >= min(dat(i).dm)))),...
+        dist_odias(i).x_twomark((dist_odias(i).d <= max(dat(i).dm)) &...
+        (dist_odias(i).d >= min(dat(i).dm))));
+    dist_odias(i).x_twomark = rN(i,4) * dist_odias(i).x_twomark;
+
+    % get geometric standard deviation from Twomey-Markowski for later...
+        % ...use in exponential distance
+    w_twomark = dist_odias(i).x_twomark / sum(dist_odias(i).x_twomark);
+    d_gm_twomark = 10^(sum(w_twomark .* log10(dist_odias(i).d))); % GM
+    sigma_g_twomark = 10^(sqrt(sum(w_twomark .* (log10(dist_odias(i).d) -...
+        log10(d_gm_twomark)).^2))); % GSD
+
     % perform inversion using 1st-order Tikhonov
     [dist_odias(i).x_tk1, ~, ~, Gpo_inv_tk1] = ...
         invert.tikhonov(Lb * A, Lb * b, lambda_tk1(i), 1);
@@ -181,7 +226,7 @@ for i = ii
     dist_odias(i).x_tk1 = rN(i,1) * dist_odias(i).x_tk1;
     dist_odias(i).Gpo_tk1 = rN(i,1) .* dist_odias(i).Gpo_tk1;
 
-    % invert with 2nd-order Tikhonov (single step)
+    % invert with 2nd-order Tikhonov
     [dist_odias(i).x_tk2, ~, ~, Gpo_inv_tk2] = ...
         invert.tikhonov(Lb * A, Lb * b, lambda_tk2(i), 2);
     dist_odias(i).Gpo_tk2 = inv(Gpo_inv_tk2);
@@ -195,33 +240,21 @@ for i = ii
     dist_odias(i).x_tk2 = rN(i,2) * dist_odias(i).x_tk2;
     dist_odias(i).Gpo_tk2 = rN(i,2) .* dist_odias(i).Gpo_tk2;    
 
-    % invert with 2nd-order two-step Tikhonov
-    [dist_odias(i).x_tk22, ~, ~, Gpo_inv_tk22] = ...
-        invert.tikhonov(Lb * A, Lb * b, lambda_tk22(i), 2, [], 1);
-    dist_odias(i).Gpo_tk22 = inv(Gpo_inv_tk22);
+    % invert with exponential distance method
+    [dist_odias(i).x_ed, ~, ~, Gpo_inv_ed] = ...
+        invert.exp_dist(Lb * A, Lb * b, lambda_ed(i),...
+        log10(sigma_g_twomark), dist_odias(i).d);
+    dist_odias(i).Gpo_ed = inv(Gpo_inv_ed);
 
-    % correct 2nd-order two-step Tikhonov for concentration
+    % correct exponential distance results for concentration
     rN(i,3) =  dist_tsi_inv(i).A_tot /...
         trapz(log10(dist_odias(i).d((dist_odias(i).d <= max(dat(i).dm)) &...
         (dist_odias(i).d >= min(dat(i).dm)))),...
-        dist_odias(i).x_tk22((dist_odias(i).d <= max(dat(i).dm)) &...
+        dist_odias(i).x_ed((dist_odias(i).d <= max(dat(i).dm)) &...
         (dist_odias(i).d >= min(dat(i).dm))));
-    dist_odias(i).x_tk22 = rN(i,3) * dist_odias(i).x_tk22;
-    dist_odias(i).Gpo_tk22 = rN(i,3) .* dist_odias(i).Gpo_tk22;    
+    dist_odias(i).x_ed = rN(i,3) * dist_odias(i).x_ed;
+    dist_odias(i).Gpo_ed = rN(i,3) .* dist_odias(i).Gpo_ed;    
 
-    % inversion based on Twomey-Markowski
-    xi = invert.get_init(Lb * A, Lb * b, dist_odias(i).d, dat(i).dm);
-    dist_odias(i).x_twomark = invert.twomark(Lb * A, Lb * b, length(xi),...
-        xi);
-
-    % correct Twomey-Markowski for concentration
-    rN(i,4) = dist_tsi_inv(i).A_tot /...
-        trapz(log10(dist_odias(i).d((dist_odias(i).d <= max(dat(i).dm))...
-        & (dist_odias(i).d >= min(dat(i).dm)))),...
-        dist_odias(i).x_twomark((dist_odias(i).d <= max(dat(i).dm)) &...
-        (dist_odias(i).d >= min(dat(i).dm))));
-    dist_odias(i).x_twomark = rN(i,4) * dist_odias(i).x_twomark;
-    
     if strcmp(opts2.correct, 'on') || strcmp(opts2.correct, 'On') ||...
             strcmp(opts2.correct, 'ON')
 
@@ -240,6 +273,19 @@ for i = ii
 
             if chk_flag2
 
+                    % repeat Twomey-Markowski (d might have changed)
+                    xi = invert.get_init(Lb * A, Lb * b, dist_odias(i).d,...
+                        dat(i).dm);
+                    dist_odias(i).x_twomark = invert.twomark(Lb * A,...
+                        Lb * b, length(xi), xi);
+                    rN(i,4) = dist_tsi_inv(i).A_tot /...
+                        trapz(log10(dist_odias(i).d((dist_odias(i).d <=...
+                        max(dat(i).dm)) & (dist_odias(i).d >= min(dat(i).dm)))),...
+                        dist_odias(i).x_twomark((dist_odias(i).d <=...
+                        max(dat(i).dm)) & (dist_odias(i).d >= min(dat(i).dm))));
+                    dist_odias(i).x_twomark = rN(i,4) *...
+                        dist_odias(i).x_twomark;
+                    
                     % repeat 1s-order Tikhonov with new smoothing factor
                     dist_odias(i).d = logspace(log10(d_lim_1(i)),...
                         log10(d_lim_2(i)), 500)';
@@ -267,33 +313,19 @@ for i = ii
                     dist_odias(i).x_tk2 = rN(i,2) * dist_odias(i).x_tk2;
                     dist_odias(i).Gpo_tk2 = rN(i,2) .* dist_odias(i).Gpo_tk2;
                     
-                    % repeat 2nd-order 2-step Tikhonov with new smoothing...
-                        % ...factor
-                    [dist_odias(i).x_tk22, ~, ~, Gpo_inv_tk22] = ...
-                        invert.tikhonov(Lb * A, Lb * b, lambda_tk22(i), 2,...
-                        [], 1);
-                    dist_odias(i).Gpo_tk22 = inv(Gpo_inv_tk22);
+                    % repeat exponential distacne with new smoothing factor
+                    [dist_odias(i).x_ed, ~, ~, Gpo_inv_ed] = ...
+                        invert.exp_dist(Lb * A, Lb * b, lambda_ed(i),...
+                        log10(sigma_g_twomark), dist_odias(i).d);
+                    dist_odias(i).Gpo_ed = inv(Gpo_inv_ed);
                     rN(i,3) = dist_tsi_inv(i).A_tot /...
                         trapz(log10(dist_odias(i).d((dist_odias(i).d <=...
                         max(dat(i).dm)) & (dist_odias(i).d >= min(dat(i).dm)))),...
-                        dist_odias(i).x_tk22((dist_odias(i).d <= max(dat(i).dm)) &...
+                        dist_odias(i).x_ed((dist_odias(i).d <= max(dat(i).dm)) &...
                         (dist_odias(i).d >= min(dat(i).dm))));
-                    dist_odias(i).x_tk22 = rN(i,3) * dist_odias(i).x_tk22;
-                    dist_odias(i).Gpo_tk22 = rN(i,3) .* dist_odias(i).Gpo_tk22;
+                    dist_odias(i).x_ed = rN(i,3) * dist_odias(i).x_ed;
+                    dist_odias(i).Gpo_ed = rN(i,3) .* dist_odias(i).Gpo_ed;
                     
-                    % repeat Twomey-Markowski (d might have changed)
-                    xi = invert.get_init(Lb * A, Lb * b, dist_odias(i).d,...
-                        dat(i).dm);
-                    dist_odias(i).x_twomark = invert.twomark(Lb * A,...
-                        Lb * b, length(xi), xi);
-                    rN(i,4) = dist_tsi_inv(i).A_tot /...
-                        trapz(log10(dist_odias(i).d((dist_odias(i).d <=...
-                        max(dat(i).dm)) & (dist_odias(i).d >= min(dat(i).dm)))),...
-                        dist_odias(i).x_twomark((dist_odias(i).d <=...
-                        max(dat(i).dm)) & (dist_odias(i).d >= min(dat(i).dm))));
-                    dist_odias(i).x_twomark = rN(i,4) *...
-                        dist_odias(i).x_twomark;
-
             end
                         
             % plot Twomey-Markowski's output (which is closest to TSI's inversion)
@@ -306,25 +338,25 @@ for i = ii
                 dist_tsi_noninv(i).dn_dlogdm', [], [], hex2rgb(clr2{2}), '-.');
             hold on
             
-            % plot Tikhonov's updated 2nd-order results
-            plt2_tk2 = hn.plotci_custom(dist_odias(i).d, dist_odias(i).x_tk2,...
-                dist_odias(i).Gpo_tk2, [], hex2rgb(clr2{5}), '-');
+            % plot Tikhonov's 1st-order results based on the last assigned lambda
+            plt2_tk1 = hn.plotci_custom(dist_odias(i).d, dist_odias(i).x_tk1,...
+                dist_odias(i).Gpo_tk1, [], hex2rgb(clr2{4}), '-');
             hold on
 
-            % plot Tikhonov's updated 2nd-order 2-steps results
-            plt2_tk22 = hn.plotci_custom(dist_odias(i).d, dist_odias(i).x_tk22,...
-                dist_odias(i).Gpo_tk22, [], hex2rgb(clr2{6}), '-');
+            % plot exponential distance's updated results
+            plt2_ed = hn.plotci_custom(dist_odias(i).d, dist_odias(i).x_ed,...
+                dist_odias(i).Gpo_ed, [], hex2rgb(clr2{6}), '-');
             hold on
 
             % plot TSI's multiple charge corrected data
             plt2_tsi_inv = hn.plotci_custom(dist_tsi_inv(i).dm',...
                 dist_tsi_inv(i).dn_dlogdm', [], [], hex2rgb(clr2{3}), '-');
             hold on
-            
-            % plot Tikhonov's 1st-order results based on the last assigned lambda
-            plt2_tk1 = hn.plotci_custom(dist_odias(i).d, dist_odias(i).x_tk1,...
-                dist_odias(i).Gpo_tk1, [], hex2rgb(clr2{4}), '-');
 
+            % plot Tikhonov's updated 2nd-order results
+            plt2_tk2 = hn.plotci_custom(dist_odias(i).d, dist_odias(i).x_tk2,...
+                dist_odias(i).Gpo_tk2, [], hex2rgb(clr2{5}), '-.');
+            
             % set the appearance
             set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
                 'TickLength', [0.02 0.02], 'XScale', 'log')
@@ -335,10 +367,10 @@ for i = ii
                 'interpreter', 'latex', 'FontSize', 16)
             title(rigstr{i}, 'interpreter', 'latex', 'FontSize', 12)
             subtitle(' ', 'interpreter', 'latex', 'FontSize', 12)
-            legend([plt2_tk1, plt2_tk2, plt2_tk22, plt2_twomark,...
+            legend([plt2_tk1, plt2_tk2, plt2_ed, plt2_twomark,...
                 plt2_tsi_inv, plt2_tsi_noninv],...
-                {'Tikhonov 1st-order', 'Tikhonov 2nd-order 1-step',...
-                'Tikhonov 2nd-order 2-steps', 'Twomey-Markowski',...
+                {'Tikhonov 1st-order', 'Tikhonov 2nd-order',...
+                'Exponential distance', 'Twomey-Markowski',...
                 'TSI-MCC', 'TSI-nonMCC'}, 'interpreter', 'latex',...
                 'FontSize', 12, 'Location', 'southoutside', 'orientation',...
                 'horizontal', 'NumColumns', 2)
@@ -358,7 +390,7 @@ for i = ii
                     if ~chk_flag2
                         msg_params_refine = {strcat('Please enter a refined',...
                             string(newline), 'lambda_tk1:'), 'lambda_tk2:',...
-                            'lambda_tk2_2:', 'dm_min:', 'dm_max:'};
+                            'lambda_ed:', 'dm_min:', 'dm_max:'};
                         chk_flag2 = true; % flag to redo the inversion
                     else                        
                         msg_params_refine = {strcat('Please enter a refined',...
@@ -370,10 +402,10 @@ for i = ii
                             {' '}, num2str(lambda_tk2_0(i), '%.1e'), ',',...
                             {' '}, 'recent value:', {' '},...
                             num2str(lambda_tk2(i), '%.1e'), ')')),...                            
-                            cell2mat(strcat('lambda_tk2_2: (initial value:',...
-                            {' '}, num2str(lambda_tk22_0(i), '%.1e'), ',',...
+                            cell2mat(strcat('lambda_ed: (initial value:',...
+                            {' '}, num2str(lambda_ed_0(i), '%.1e'), ',',...
                             {' '}, 'recent value:', {' '},...
-                            num2str(lambda_tk22(i), '%.1e'), ')')),...
+                            num2str(lambda_ed(i), '%.1e'), ')')),...
                             cell2mat(strcat('dm_min:', {' '}, '(initial value:',...
                             {' '}, num2str(d_lim_1_0(i), '%.1e'), ',', {' '},...
                             'recent value:', {' '}, num2str(d_lim_1(i), '%.1e'),...
@@ -387,14 +419,14 @@ for i = ii
                     response2b = inputdlg(msg_params_refine,...
                         'Refine Tikhonov parameters', [1 60; 1 60; 1 60;...
                         1 60; 1 60], {num2str(lambda_tk1(i)),...
-                        num2str(lambda_tk2(i)), num2str(lambda_tk22(i)),...
+                        num2str(lambda_tk2(i)), num2str(lambda_ed(i)),...
                         num2str(d_lim_1(i)), num2str(d_lim_2(i))});
                     
                     % terminate the code if user hits cancel
                     if ~isempty(response2b)
                         lambda_tk1(i) = str2double(response2b{1});
                         lambda_tk2(i) = str2double(response2b{2});
-                        lambda_tk22(i) = str2double(response2b{3});
+                        lambda_ed(i) = str2double(response2b{3});
                         d_lim_1(i) = str2double(response2b{4});
                         d_lim_2(i) = str2double(response2b{5});
                     else
@@ -421,7 +453,7 @@ for i = ii
         response2c = listdlg('PromptString', {'Select method for output within',...
             'the TSI detection range', ' '}, 'SelectionMode','single',...
             'ListString', {'Tikhonov 1st order', 'Tikhonov 2nd order',...
-            'Tikhonov 2nd order, 2-steps'});
+            'Exponential distance'});
         
         % terminate the program if hit cancel
         if isempty(response2c); return; end
@@ -438,9 +470,9 @@ for i = ii
                 Gpo00 = dist_odias(i).Gpo_tk2(inds_in,inds_in);
     
             case 3
-                dist_odias(i).x(inds_in) = dist_odias(i).x_tk22(inds_in);
-                Gpo0 = dist_odias(i).Gpo_tk22;
-                Gpo00 = dist_odias(i).Gpo_tk22(inds_in,inds_in);
+                dist_odias(i).x(inds_in) = dist_odias(i).x_ed(inds_in);
+                Gpo0 = dist_odias(i).Gpo_ed;
+                Gpo00 = dist_odias(i).Gpo_ed(inds_in,inds_in);
                 
         end
     
@@ -451,7 +483,7 @@ for i = ii
         response2d = listdlg('PromptString', {'Select method for output outside',...
             'the TSI detection range', ' '}, 'SelectionMode','single',...
             'ListString', {'Tikhonov 1st order', 'Tikhonov 2nd order',...
-            'Tikhonov 2nd order, 2-steps', 'Twomey-Markowski'});
+            'Exponential distance', 'Twomey-Markowski'});
         
         % terminate the program if hit cancel
         if isempty(response2d); return; end
@@ -466,8 +498,8 @@ for i = ii
                 dist_odias(i).Gpo = dist_odias(i).Gpo_tk2;
                 
             case 3
-                dist_odias(i).x(inds_out) = dist_odias(i).x_tk22(inds_out);
-                dist_odias(i).Gpo = dist_odias(i).Gpo_tk22;
+                dist_odias(i).x(inds_out) = dist_odias(i).x_ed(inds_out);
+                dist_odias(i).Gpo = dist_odias(i).Gpo_ed;
                 
             case 4
                 dist_odias(i).x(inds_out) = dist_odias(i).x_twomark(inds_out);
@@ -588,6 +620,71 @@ lgd1.NumColumns = 2;
 
 % close the inversion iteration figure if present
 if exist('f2', 'var'); close(f2); end
+
+%% present data in groups if requested by user
+
+if exist('grp', 'var') && ~isempty(grp)
+    
+    % initialize variables to process and store averages
+    d0 = cell(n_grp,1);
+    dn0_dlogd = cell(n_grp,1);
+    d = cell(n_grp,1);
+    dn_dlogd = cell(n_grp,1);
+    se_dn_dlogd = cell(n_grp,1);
+    ub_dn_dlogd = cell(n_grp,1);
+    lb_dn_dlogd = cell(n_grp,1);
+
+    % initialize size distribution figure for groups
+    f3 = figure(3);
+    f3.Position = [150, 150, 500, 500];
+    set(f3, 'color', 'white');
+    
+    % plot and legend placeholders
+    plt3 = cell(n_grp,1);
+    lgdtxt3 = cell(n_grp,1);
+
+    % loop over the groups
+    for j = 1 : n_grp
+
+        d0{j} = cell(length(ind_grp{j}),1);
+        dn0_dlogd{j} = cell(length(ind_grp{j}),1);
+
+        for k = 1 : length(ind_grp{j})
+
+            d0{j}{k} = dist_odias(ind_grp{j}(k)).d;
+            dn0_dlogd{j}{k} = dist_odias(ind_grp{j}(k)).x;
+
+        end
+        
+        % take average of size distribution over each group
+        [dn_dlogd{j}, d{j}, se_dn_dlogd{j}] = hn.avg_dist(d0{j}, dn0_dlogd{j});
+
+        % compute the bounds
+        ub_dn_dlogd{j} = dn_dlogd{j} + se_dn_dlogd{j};
+        lb_dn_dlogd{j} = dn_dlogd{j} - se_dn_dlogd{j};
+        
+        % plot the average distributions and error bounds
+        plt3{j} = plot(d{j}, dn_dlogd{j}, 'Color', hex2rgb(clr2{j}),...
+            'LineWidth', 1.5);
+        hold on
+        fill([d{j}, fliplr(d{j})], [ub_dn_dlogd{j}, fliplr(lb_dn_dlogd{j})],...
+             hex2rgb(clr2{j}), 'EdgeColor', 'none', 'FaceAlpha', 0.3);
+
+        lgdtxt3{j} = strcat('Group', {' '}, num2str(j));
+
+    end
+    
+    % set apprearances
+    set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
+        'TickLength', [0.02 0.02], 'XScale', 'log')
+    xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
+        'FontSize', 16)
+    ylabel('$\mathrm{d}n/\mathrm{dlog}(d_\mathrm{m}) [\#/\mathrm{cm}^3]$',...
+        'interpreter', 'latex', 'FontSize', 16)
+    legend(cat(2, plt3{:}), cat(2, lgdtxt3{:}), 'interpreter', 'latex',...
+    'FontSize', 12);
+    
+end
 
 %% save figures and data
 
