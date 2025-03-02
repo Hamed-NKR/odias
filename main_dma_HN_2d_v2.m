@@ -29,6 +29,7 @@ fdir = intab.fdir(ii0); % folder addresses of MATLAB workspaces that...
 fname = intab.fname(ii0); % filenames for MATLAB workspaces
 clr = intab.clr(ii0); % assign colors to plot markers and lines
 mrk = intab.mrk(ii0); % assign marker symbols
+mrksz = intab.mrksz(ii0); % assign marker size
 linstl = intab.linstl(ii0); % assign line styles for plots
 test_date = intab.date(ii0); % date of measurement
 test_condition = intab.condt(ii0); % condition of measurement
@@ -63,8 +64,10 @@ if ismember('group', fieldnames(intab))
 end
 
 % color for group plots
-clr2 = {{'#8D493A', '#DC8686'}, {'#537188', '#7EACB5'}};
-mrk2 = {'^', 'o'};
+clr2 = {{'#8D493A', '#DC8686'}, {'#537188', '#7EACB5'},...
+    {'#8174A0', '#A888B5'}, {'#659287', '#B1C29E'}};
+mrk2 = {'^', 'o', 's', 'h'};
+mrksz2 = [20, 20, 30, 25];
 
 %% initialize universal correlation for rho_eff vs. dm
 
@@ -87,19 +90,28 @@ dists = cell(n_dat,1);
 
 % initialize the figure for effective densities segregated by day
 f1 = figure(1);
-f1.Position = [50, 50, 500, 600];
+f1.Position = [50, 50, 800, 500];
 set(f1, 'color', 'white');
+t1 = tiledlayout(1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-% initialize plot and legend placeholders
+% initialize placeholders for plots and legends 
 n_ii = length(ii);
 plt1 = cell(n_dat + 1, 1);
+plt3 = cell(n_dat + 1, 1);
 lgdtxt1 = cell(n_dat + 1, 1);
 
-% plot universal correlation
-plt1{end} = plot(dm_uc, rho_eff_uc, 'Color', [0.4940 0.1840 0.5560],...
-    'LineStyle', '-.', 'LineWidth', 2);
+% plot the universal correlation
+nexttile(1)
+plt1{end} = plot(dm_uc, rho_eff_uc, 'Color', hex2rgb('#DEAA79'),... % [0.4940 0.1840 0.5560]
+    'LineStyle', '-.', 'LineWidth', 3);
 lgdtxt1{end} = 'Olfert \& Rogak (2019)';
 hold on
+
+% initialize figure for classified distribution shape vs. AAC setpoint 
+f3 = figure(3);
+f3.Position = [100, 100, 700, 800];
+set(f3, 'color', 'white');
+t3 = tiledlayout(2, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
 for i = ii
     
@@ -123,21 +135,87 @@ for i = ii
 
     % store the processed data
     dists{i} = dist_odias;
-    
-    % plot scatters of effective density vs. mobility diameter at each day
+        
+    % scatter plots of effective density vs. mobility diameter at each day
+    figure(f1)
+    nexttile(1)
     plt1{i} = scatter(cat(1,dists{i}.d_mode), cat(1,dists{i}.rho_eff),...
+        mrksz(i), hex2rgb(clr{i}), mrk{i}, 'LineWidth', 1.5);
+    hold on
+    
+    % plot scatters of GSD of mobility size distribution vs. mobility...
+        % ...diameter at each day
+    nexttile(2) % geometric sta
+    scatter(cat(1,dists{i}.d_mode), cat(1,dists{i}.sigma_g),...
         15, hex2rgb(clr{i}), mrk{i}, 'LineWidth', 1.5);
     hold on
     
     % make a description for the dataset
     lgdtxt1{i} = strcat(test_date(i), ',', {' '}, test_condition(i));
-    
+
+    % plot the second to fourth moments of tandem distributions
+    figure(f3)
+    nexttile(1) % mode
+    plt3{i} = scatter(cat(1,dists{i}.da), cat(1,dists{i}.d_mode),...
+        mrksz(i), hex2rgb(clr{i}), mrk{i}, 'LineWidth', 1.5);
+    hold on
+    if i == ii(end)
+        box on
+        set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
+            'TickLength', [0.02 0.02], 'XScale', 'log', 'YScale', 'log')
+        xlabel('$d_\mathrm{a}$ [nm]', 'interpreter', 'latex',...
+            'FontSize', 16)
+        ylabel('$d_\mathrm{mod} [-]$',...
+            'interpreter', 'latex', 'FontSize', 16)
+    end    
+    nexttile(2) % geometric standard deviation
+    plt3{i} = scatter(cat(1,dists{i}.da), cat(1,dists{i}.sigma_g),...
+        mrksz(i), hex2rgb(clr{i}), mrk{i}, 'LineWidth', 1.5);
+    hold on
+    if i == ii(end)
+        box on
+        set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
+            'TickLength', [0.02 0.02], 'XScale', 'log')
+        xlabel('$d_\mathrm{a}$ [nm]', 'interpreter', 'latex',...
+            'FontSize', 16)
+        ylabel('$\sigma_\mathrm{m} [-]$',...
+            'interpreter', 'latex', 'FontSize', 16)
+    end    
+    nexttile(3) % skewness
+    scatter(cat(1,dists{i}.da), cat(1,dists{i}.skw),...
+        15, hex2rgb(clr{i}), mrk{i}, 'LineWidth', 1.5);
+    hold on
+    if i == ii(end)
+        box on
+        set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
+            'TickLength', [0.02 0.02], 'XScale', 'log')
+        xlabel('$d_\mathrm{a}$ [nm]', 'interpreter', 'latex',...
+            'FontSize', 16)
+        ylabel('Skewness [-]', 'interpreter', 'latex', 'FontSize', 16)
+    end    
+    nexttile(4) % kurtosis
+    scatter(cat(1,dists{i}.da), cat(1,dists{i}.krts),...
+        mrksz(i), hex2rgb(clr{i}), mrk{i}, 'LineWidth', 1.5);
+    hold on
+    if i == ii(end)
+        box on
+        set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
+            'TickLength', [0.02 0.02], 'XScale', 'log')
+        xlabel('$d_\mathrm{a}$ [nm]', 'interpreter', 'latex',...
+            'FontSize', 16)
+        ylabel('Kurtosis [-]', 'interpreter', 'latex', 'FontSize', 16)
+    end    
+
+    % set legend for moments of distributions
+
     % clear redundant variables
     clear dist_odias dat rho_eff
 
 end
 
-% set apprearances
+% set apprearances for figure 1
+figure(f1)
+nexttile(1)
 box on
 set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
     'TickLength', [0.02 0.02], 'XScale', 'log', 'YScale', 'log')
@@ -145,6 +223,14 @@ xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
     'FontSize', 16)
 ylabel('$\rho_\mathrm{eff} [\mathrm{kg}/\mathrm{m}^3]$',...
     'interpreter', 'latex', 'FontSize', 16)
+hold on
+nexttile(2)
+box on
+set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
+    'TickLength', [0.02 0.02], 'XScale', 'log')
+xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
+    'FontSize', 16)
+ylabel('$\sigma_\mathrm{m} [-]$', 'interpreter', 'latex', 'FontSize', 16)
 
 %% present data in groups if requested by user
 
@@ -162,8 +248,8 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
     lgdtxt2 = cell(n_grp + 1, 1);
 
     % plot universal correlation
-    plt2{end} = plot(dm_uc, rho_eff_uc, 'Color', [0.4940 0.1840 0.5560],...
-        'LineStyle', '-.', 'LineWidth', 2);
+    plt2{end} = plot(dm_uc, rho_eff_uc, 'Color', hex2rgb('#DEAA79'),... % [0.4940 0.1840 0.5560]
+        'LineStyle', '-.', 'LineWidth', 3);
     lgdtxt2{end} = 'Olfert \& Rogak (2019)';
     hold on
     
@@ -186,7 +272,7 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
         end
               
         % plot the grouped effective density datasets
-        plt2{k} = scatter(dist_grp(k).d_mode, dist_grp(k).rho_eff, 15,...
+        plt2{k} = scatter(dist_grp(k).d_mode, dist_grp(k).rho_eff, mrksz2(k),...
             hex2rgb(clr2{k}{1}), mrk2{k}, 'LineWidth', 1.5);
         hold on
 
@@ -207,25 +293,34 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
     ylim([0.8 * min(cat(2,dist_grp.rho_eff))...
         1.2 * max(cat(2,dist_grp.rho_eff))])
     legend(cat(2, plt2{:}), cat(2, lgdtxt2{:}), 'interpreter', 'latex',...
-    'FontSize', 12, 'Location', 'southwest');
+        'FontSize', 12, 'Location', 'southwest');
     
-    % adjust the bounds in non-grouped figure
+    % adjust the bounds in non-grouped effective density figure
     figure(f1)
+    nexttile(1)
     xlim([0.8 * min(cat(2,dist_grp.d_mode))...
         1.2 * max(cat(2,dist_grp.d_mode))])
     ylim([0.8 * min(cat(2,dist_grp.rho_eff))...
         1.2 * max(cat(2,dist_grp.rho_eff))])
 
-    % sort out order of legends in non-grouped figure
-    legend(cat(2, plt1{iii}, plt1{end}), cat(2, lgdtxt1{iii}, lgdtxt1{end}),...
-    'interpreter', 'latex', 'FontSize', 10, 'Location', 'southoutside',...
-    'NumColumns', 2);
+    % sort out order of legends in non-grouped figures
+    lgd1 = legend(cat(2, plt1{iii}, plt1{end}), cat(2, lgdtxt1{iii},...
+    lgdtxt1{end}), 'interpreter', 'latex', 'FontSize', 12);
+    lgd1.Layout.Tile = 'south';
+    lgd1.NumColumns = 2;
+
+
+    figure(f3)
+    lgd3 = legend(cat(2, plt3{iii}), cat(2, lgdtxt1{iii}),...
+    'interpreter', 'latex', 'FontSize', 12);
+    lgd3.Layout.Tile = 'south';
+    lgd3.NumColumns = 2;
 
 else
 
-    % just print legend for the non-grouped figure
+    % just print legend for the non-grouped figures
     legend(cat(2, plt1{:}), cat(2, lgdtxt1{:}), 'interpreter', 'latex',...
-    'FontSize', 10, 'Location', 'southoutside', 'NumColumns', 2);
+    'FontSize', 12, 'Location', 'southoutside', 'NumColumns', 2);
 
 end
 
