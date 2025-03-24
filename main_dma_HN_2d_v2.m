@@ -14,6 +14,8 @@ varnames = {'dist_odias', 'dat'};
 % on-demand function to correct bias in AAC classification
 coef_rho = @(x) -3.598 * x.^(-0.8376) + 1.27;
 
+% polynomial degree fit
+fittype = {'poly3', 'poly3', 'poly4', 'poly4'};
 
 %% read batch file
 
@@ -122,10 +124,10 @@ for i = ii
     fadd_wsp = strcat(fdir{i}, '\', fname{i}, '.mat');
     load(fadd_wsp, varnames{:})
     
-    % find the highest peak among the modes at each AAC setpoint
-    dist_odias = hn.selectpeak(dist_odias);
-    
-    for j = 1 : size(dist_odias,1) 
+    % double check distribution metrics
+    dist_odias = adjust_dist(dist_odias);
+
+    for j = 1 : size(dist_odias,1)
 
         % calculate effective density for each setpoint
         dist_odias(j).rho_eff = DAT.RHO_EFF(dist_odias(j).d_mode,...
@@ -353,7 +355,7 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
         % hold on
 
         % use optimized polyfit model
-        fit4{k} = fit(dist_grp(k).da', dist_grp(k).d_gm', 'poly3',...
+        fit4{k} = fit(dist_grp(k).da', dist_grp(k).d_gm', fittype{k},...
             'Normalize', 'on', 'Robust', 'on');
         da_fit{k} = linspace(min(dist_grp(k).da),...
             max(dist_grp(k).da), 100)'; % set extrapolated range
@@ -368,9 +370,9 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
         
     end
     
-    lgd2 = legend(cat(2, plt21{:}), cat(2, lgdtxt2{:}), 'interpreter', 'latex',...
-        'FontSize', 12, 'Location', 'northoutside', 'Orientation',...
-        'horizontal');
+    lgd2 = legend(cat(2, plt21{:}), cat(2, lgdtxt2{:}), 'interpreter',...
+        'latex', 'FontSize', 12, 'Location', 'northoutside',...
+        'Orientation', 'horizontal');
     lgd2.Layout.Tile = 'south';
     
     % adjust the bounds in non-grouped effective density figure
@@ -426,7 +428,47 @@ fname_out = regexprep(fname_out, ' ', '_');
 % save MATLAB worspace
 save(strcat(fdir_out, '\', fname_out, '.mat'));
 
+function dist_odias = adjust_dist(dist_odias)
+% recalculate parameters of size distribution
 
+for i = 1 : length(dist_odias)
 
+    % remove negative counts (artifacts)
+    iii = dist_odias(i).x < 0;
+    dist_odias(i).x2 = dist_odias(i).x;
+    dist_odias(i).d2 = dist_odias(i).d;
+    if nnz(iii)    
+        dist_odias{i}.x2(iii) = [];
+        dist_odias{i}.d2(iii) = [];
+    end
 
+    % find local modes of distribution and remove noise
+    [dn_dlogd_mode, dist_odias(i).d_mode] = findpeaks(dist_odias(i).x2,...
+        dist_odias(i).d2); 
+    dist_odias(i).d_mode(dn_dlogd_mode / max(dn_dlogd_mode) < 0.1) = [];
 
+    % find geometric mean (GM) and geometric standard deviation (GSD)
+    w = dist_odias(i).x2 / sum(dist_odias(i).x2); % normalize dn/dlog(d) to get weights
+    dist_odias(i).d_gm = 10^(sum(w .* log10(dist_odias(i).d2))); % GM
+    dist_odias(i).sigma_g = 10^(sqrt(sum(w .* (log10(dist_odias(i).d2) -...
+        log10(dist_odias(i).d_gm)).^2))); % GSD
+
+    % total concentration (i.e. area below the size distribution curve)
+    dist_odias(i).n_tot = trapz(log10(dist_odias(i).d2), dist_odias(i).x2);
+    
+    % skewness in log-space (0 for a normal distribution, positive for...
+    % ...right-skewed, negative for left-skewed)
+    dist_odias(i).skw = sum(w .* (log10(dist_odias(i).d2) -...
+        log10(dist_odias(i).d_gm)).^3) / ((log10(dist_odias(i).sigma_g))^3);
+    
+    % kurtosis in log-space (3 for a normal distribution, > 3 for...
+    % ...heavy tails, < 3 for light tails)
+    dist_odias(i).krts = sum(w .* (log10(dist_odias(i).d2) -...
+        log10(dist_odias(i).d_gm)).^4) / ((log10(dist_odias(i).sigma_g))^4);
+    
+    % find the highest peak among the modes at each AAC setpoint
+    dist_odias = hn.selectpeak(dist_odias);
+    
+end
+
+end

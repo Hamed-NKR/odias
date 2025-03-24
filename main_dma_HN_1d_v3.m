@@ -622,25 +622,25 @@ for i = ii
     end
 
     % find local modes of distribution and remove noise
-    [dn_dlogd_mode, dist_odias(i).d_mode] = findpeaks(dist_odias(i).x_tk1,...
+    [dn_dlogd_mode, dist_odias(i).d_mode] = findpeaks(dist_odias(i).x,...
         dist_odias(i).d); 
     dist_odias(i).d_mode(dn_dlogd_mode / max(dn_dlogd_mode) < 0.1) = [];
 
     % find geometric mean (GM) and geometric standard deviation (GSD)
-    w = dist_odias(i).x_tk1 / sum(dist_odias(i).x_tk1); % normalize dn/dlog(d) to get weights
+    w = dist_odias(i).x / sum(dist_odias(i).x); % normalize dn/dlog(d) to get weights
     dist_odias(i).d_gm = 10^(sum(w .* log10(dist_odias(i).d))); % GM
     dist_odias(i).sigma_g = 10^(sqrt(sum(w .* (log10(dist_odias(i).d) -...
         log10(dist_odias(i).d_gm)).^2))); % GSD
 
     % total concentration (i.e. area below the size distribution curve)
-    dist_odias(i).n_tot = trapz(log10(dist_odias(i).d), dist_odias(i).x_tk1);
+    dist_odias(i).n_tot = trapz(log10(dist_odias(i).d), dist_odias(i).x);
     
     % skewness in log-space (0 for a normal distribution, positive for...
     % ...right-skewed, negative for left-skewed)
     dist_odias(i).skw = sum(w .* (log10(dist_odias(i).d) -...
         log10(dist_odias(i).d_gm)).^3) / ((log10(dist_odias(i).sigma_g))^3);
     
-    % skewness in log-space (3 for a normal distribution, > 3 for...
+    % kurtosis in log-space (3 for a normal distribution, > 3 for...
     % ...heavy tails, < 3 for light tails)
     dist_odias(i).krts = sum(w .* (log10(dist_odias(i).d) -...
         log10(dist_odias(i).d_gm)).^4) / ((log10(dist_odias(i).sigma_g))^4);

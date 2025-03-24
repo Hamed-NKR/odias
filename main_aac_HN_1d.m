@@ -93,6 +93,15 @@ for i = ii
     ub_dn_dlogda = dists_aac{i}.dn_dlogda + dists_aac{i}.ci_dn_dlogd;
     lb_dn_dlogda = dists_aac{i}.dn_dlogda - dists_aac{i}.ci_dn_dlogd;
     
+    iii = dists_aac{i}.dn_dlogda < 0;
+    if nnz(iii)
+        dists_aac{i}.da(iii) = [];
+        dists_aac{i}.dn_dlogda(iii) = [];
+        dists_aac{i}.ci_dn_dlogda(iii) = [];
+        dists_aac{i}.ub_dn_dlogda(iii) = [];
+        dists_aac{i}.lb_dn_dlogda(iii) = [];
+    end
+
     plt{i} = plot(dists_aac{i}.da, dists_aac{i}.dn_dlogda, 'Color',...
         hex2rgb(clr1{i}), 'LineStyle', linstl{i}, 'LineWidth', linsz(i));
     hold on
@@ -100,6 +109,20 @@ for i = ii
         [ub_dn_dlogda, fliplr(lb_dn_dlogda)],...
         hex2rgb(clr2{i}), 'EdgeColor', 'none', 'FaceAlpha', 0.5);
 
+    % total concentration
+    dists_aac{i}.n_tot = trapz(log10(dists_aac{i}.da),...
+        dists_aac{i}.dn_dlogda);
+    
+    % weights for calculating geometric mean
+    w = dists_aac{i}.dn_dlogda / sum(dists_aac{i}.dn_dlogda);
+    
+    % geometric mean
+    dists_aac{i}.gm_da = 10^(sum(w .* log10(dists_aac{i}.da)));
+    
+    % geometric standard deviation
+    dists_aac{i}.gsd_da = 10^(sqrt(sum(w .* (log10(dists_aac{i}.da) -...
+        log10(dists_aac{i}.gm_da)).^2)));    
+    
 end
 
 set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
