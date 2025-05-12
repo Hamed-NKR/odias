@@ -261,20 +261,42 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
 
     % initialize the figure for ensemble groups
     f2 = figure(2);
-    f2.Position = [150, 150, 800, 400];
+    f2.Position = [150, 150, 900, 500];
     set(f2, 'color', 'white');
     t2 = tiledlayout(1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
     
     % initialize plot and legend placeholders
-    plt21 = cell(n_grp + 1, 1);
-    lgdtxt2 = cell(n_grp + 1, 1);
+    plt21 = cell(n_grp + 2, 1);
+    lgdtxt2 = cell(n_grp + 2, 1);
     
     nexttile(1)
     % plot universal correlation
-    plt21{end} = plot(dm_uc, rho_eff_uc, 'Color', hex2rgb('#DEAA79'),... % [0.4940 0.1840 0.5560]
+    plt21{end-1} = plot(dm_uc, rho_eff_uc, 'Color', hex2rgb('#DEAA79'),... % [0.4940 0.1840 0.5560]
         'LineStyle', '-.', 'LineWidth', 3);
-    lgdtxt2{end} = 'Olfert \& Rogak (2019)';
+    lgdtxt2{end-1} = 'Olfert \& Rogak (2019)';
     hold on
+
+    %%% Sipkens and Corbin (2024) correlation for collapsed soot
+    % correlation constants
+    rho_eff_100_ca = 786;    % kg/m^3
+    rho_eff_c = 651;         % kg/m^3
+    zeta_ca = 2.44;
+    dm_transition = 140;     % nm
+    dm_100 = 100;            % nm (reference point)
+
+    % Preallocate output
+    rho_eff_col = zeros(size(dm_uc));
+
+    % Apply piecewise definition
+    rho_eff_col(dm_uc < dm_transition) = rho_eff_100_ca .*...
+        (dm_uc(dm_uc < dm_transition) ./ dm_100) .^ (zeta_ca - 3);
+    rho_eff_col(dm_uc >= dm_transition) = rho_eff_c;
+
+    % plot correlation
+    plt21{end} = plot(dm_uc, rho_eff_col, 'Color', hex2rgb('#9FB3DF'),...
+        'LineStyle', ':', 'LineWidth', 2.5);
+    lgdtxt2{end} = 'Sipkens \& Corbin (2024)';
+    %%%
     
     % loop over the groups
     for k = 1 : n_grp
@@ -317,16 +339,16 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
 
         % set apprearances
         box on
-        set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
+        set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 16,...
             'TickLength', [0.02 0.02], 'XScale', 'log', 'YScale', 'log')
         xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
-            'FontSize', 16)
+            'FontSize', 24)
         ylabel('$\rho_\mathrm{eff} [\mathrm{kg}/\mathrm{m}^3]$',...
-            'interpreter', 'latex', 'FontSize', 16)
+            'interpreter', 'latex', 'FontSize', 24)
         xlim([0.8 * min(cat(2,dist_grp.d_mode))...
             1.2 * max(cat(2,dist_grp.d_mode))])
         ylim([0.8 * min(cat(2,dist_grp.rho_eff))...
-            1.2 * max(cat(2,dist_grp.rho_eff))])
+            1.5 * max(cat(2,dist_grp.rho_eff))])
 
         nexttile(2)
         plt22{k} = scatter(dist_grp(k).d_mode, dist_grp(k).sigma_g,...
@@ -335,12 +357,12 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
 
         % set apprearances
         box on
-        set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12,...
+        set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 16,...
             'TickLength', [0.02 0.02], 'XScale', 'log')
         xlabel('$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
-            'FontSize', 16)
-        ylabel('$\sigma_\mathrm{m} [-]$', 'interpreter', 'latex',...
-            'FontSize', 16)
+            'FontSize', 24)
+        ylabel('$\sigma_\mathrm{m}$  [-]', 'interpreter', 'latex',...
+            'FontSize', 24)
         
         figure(f4) % curve fit to dm vs da data
 
@@ -371,8 +393,8 @@ if exist('ind0_grp', 'var') && ~isempty(ind0_grp)
     end
     
     lgd2 = legend(cat(2, plt21{:}), cat(2, lgdtxt2{:}), 'interpreter',...
-        'latex', 'FontSize', 12, 'Location', 'northoutside',...
-        'Orientation', 'horizontal');
+        'latex', 'FontSize', 20, 'Location', 'northoutside',...
+        'NumColumns', 3);
     lgd2.Layout.Tile = 'south';
     
     % adjust the bounds in non-grouped effective density figure
@@ -409,7 +431,7 @@ else
 
     % just print legend for the non-grouped figures
     legend(cat(2, plt1{:}), cat(2, lgdtxt1{:}), 'interpreter', 'latex',...
-        'FontSize', 12, 'Location', 'southoutside', 'NumColumns', 2);
+        'FontSize', 12, 'Location', 'southoutside', 'NumColumns', 3);
 
 end
 
@@ -426,7 +448,7 @@ fname_out = regexprep(fname_out, ':', '-');
 fname_out = regexprep(fname_out, ' ', '_');
 
 % save MATLAB worspace
-save(strcat(fdir_out, '\', fname_out, '.mat'));
+% save(strcat(fdir_out, '\', fname_out, '.mat'));
 
 function dist_odias = adjust_dist(dist_odias)
 % recalculate parameters of size distribution

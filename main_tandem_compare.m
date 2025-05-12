@@ -15,7 +15,7 @@ load(strcat(fdir_in, '\', fname_in, '.mat'), 'dist_odias', 'dist_tsi_inv',...
 
 % initialize figure
 f1 = figure(1);
-f1.Position = [0, 0, 900, 1300];
+f1.Position = [50, 0, 900, 1300];
 set(f1, 'color', 'white')
 tl1 = tiledlayout(4,3);
 tl1.TileSpacing = 'compact';
@@ -25,7 +25,7 @@ tl1.Padding = 'compact';
 plt1 = cell(6,1);
 lgdtxt1 = {'TSI non-corrected', 'TSI inverted',...
      'Twomey-Markowski', 'Exponential distance',...
-     '$1^\mathrm{st}$ order Tikhonov', '$2^\mathrm{nd}$ order Tikhonov',};
+     '$1^\mathrm{st}$ order Tikhonov', '$2^\mathrm{nd}$ order Tikhonov'};
 
 for i = 1 : 12
     
@@ -87,9 +87,9 @@ lgd1.Layout.Tile = 'north';
 
 % initialize figure
 f2 = figure(2);
-f2.Position = [100, 100, 1300, 500];
+f2.Position = [150, 0, 450, 1300];
 set(f2, 'color', 'white')
-tl2 = tiledlayout(1,3);
+tl2 = tiledlayout(3,1);
 tl2.TileSpacing = 'compact';
 tl2.Padding = 'compact';
 
@@ -161,12 +161,12 @@ for i = 1 : 3
     set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 16,...
         'TickLength', [0.03 0.03], 'xScale', 'log', 'yScale', 'log')
     xlim([60 1000])
-    ylim([1e2 3e6])
+    ylim([1e3 3e6])
 
     % panel titles
     title(strcat('$d_\mathrm{a}$ =', {' '},...
         num2str(da2(i), '%d'), '$\pm 5$ [nm]'),...
-        'interpreter', 'latex', 'FontSize', 20);    
+        'interpreter', 'latex', 'FontSize', 18);    
     
 end
 
@@ -176,5 +176,7 @@ xlabel(tl2, '$d_\mathrm{m}$ [nm]', 'interpreter', 'latex',...
 ylabel(tl2, '$\mathrm{d}n/\mathrm{dlog}(d_\mathrm{m}) [\#/\mathrm{cm}^3]$',...
     'interpreter', 'latex', 'FontSize', 24)
 lgd2 = legend(cat(1, plt2{:}), lgdtxt2, 'interpreter', 'latex',...
-    'FontSize', 20, 'Orientation', 'horizontal');
+    'FontSize', 18, 'Orientation', 'horizontal', 'NumColumns', 2);
 lgd2.Layout.Tile = 'north';
+
+
